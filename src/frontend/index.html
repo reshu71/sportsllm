@@ -6,18 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APEX | Endurance Sports AI Coach</title>
     <meta name="description"
-        content="APEX — AI-powered endurance coaching with VDOT, TSS, PMC analytics, and personalized training plans.">
-    <!-- Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
-        rel="stylesheet">
+        content="APEX is an AI-powered endurance sports coach combining RAG, VDOT analysis, and periodized training for runners, cyclists and triathletes.">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Marked.js for markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- Leaflet.js -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -47,15 +44,16 @@
                         <i data-lucide="bar-chart-3"></i> Analytics
                     </button>
                     <button class="tab-btn" id="tab-plan" onclick="switchTab('plan')">
-                        <i data-lucide="calendar-range"></i> Training Plan
+                        <i data-lucide="calendar"></i> Training Plan
                     </button>
                 </div>
 
-                <div class="nav-section" id="focus-areas-section">
-                    <h3>Focus Areas</h3>
-                    <ul>
-                        <li><i data-lucide="trending-up"></i> Training & Planning</li>
-                        <li><i data-lucide="heart-pulse"></i> Recovery & HRV</li>
+                <!-- Knowledge Areas -->
+                <div class="nav-section">
+                    <h3>Knowledge Areas</h3>
+                    <ul class="know-list">
+                        <li><i data-lucide="trophy"></i> Race Predictions</li>
+                        <li><i data-lucide="heart-pulse"></i> HR Zone Training</li>
                         <li><i data-lucide="apple"></i> Nutrition & Fueling</li>
                         <li><i data-lucide="activity-square"></i> Physiology</li>
                     </ul>
@@ -68,8 +66,7 @@
                         <a href="/auth/strava" class="btn-strava">🔗 Connect Strava</a>
                     </div>
                 </div>
-
-                <div class="nav-section sources-section" id="sources-section" style="display: none;">
+                <div class="nav-section">
                     <h3>Citation Sources <span id="sources-count" class="badge">0</span></h3>
                     <div id="sources-list" class="sources-list"></div>
                 </div>
@@ -85,11 +82,10 @@
             <header class="top-header">
                 <div class="header-titles">
                     <h2 id="page-title">AI Coach</h2>
-                    <p class="subtitle" id="page-subtitle">Ask me about running, cycling, triathlon, or swimming</p>
+                    <p id="page-subtitle" class="subtitle">RAG-powered endurance coaching</p>
                 </div>
                 <div class="header-actions">
-                    <div id="syncIndicator"></div>
-                    <button class="icon-btn" id="new-chat-btn" title="New Chat">
+                    <button class="apex-btn-outline" id="new-chat-btn">
                         <i data-lucide="plus-square"></i>
                     </button>
                 </div>
@@ -97,32 +93,33 @@
 
             <!-- ==================== CHAT VIEW ==================== -->
             <div class="chat-wrapper" id="chat-wrapper">
+                <!-- V4: Three-mode chat tabs -->
+                <div class="chat-mode-tabs">
+                    <button class="chat-mode-btn active" data-mode="ask" onclick="switchChatMode('ask')">
+                        <i data-lucide="help-circle"></i> Ask
+                    </button>
+                    <button class="chat-mode-btn" data-mode="analyze" onclick="switchChatMode('analyze')">
+                        <i data-lucide="trending-up"></i> Analyze
+                    </button>
+                    <button class="chat-mode-btn" data-mode="plan" onclick="switchChatMode('plan')">
+                        <i data-lucide="clipboard-list"></i> Plan
+                    </button>
+                </div>
+
                 <div class="chat-container" id="chat-container">
                     <div class="welcome-screen" id="welcome-screen">
-                        <div class="welcome-icon"><i data-lucide="zap"></i></div>
-                        <h2>Welcome to APEX</h2>
-                        <p>Your elite AI coach. Backed by scientific research and real-world data.</p>
-                        <div class="suggested-prompts">
-                            <button class="prompt-chip"
-                                onclick="setPrompt('What does science say about zone 2 training for marathon prep?')">Zone
-                                2 Marathon Science</button>
-                            <button class="prompt-chip"
-                                onclick="setPrompt('How should I fuel a 4-hour cycling ride?')">4-Hour Ride
-                                Fueling</button>
-                            <button class="prompt-chip"
-                                onclick="setPrompt('What is the optimal taper strategy for an Ironman?')">Ironman
-                                Taper</button>
-                            <button class="prompt-chip"
-                                onclick="setPrompt('How does altitude training affect VO2 max?')">Altitude vs
-                                VO2</button>
+                        <h3>🏃 APEX Endurance Coach</h3>
+                        <p>Ask me anything about endurance sports, training, or nutrition</p>
+                        <div class="prompt-chips" id="prompt-chips">
+                            <!-- Populated per mode by JS -->
                         </div>
                     </div>
                 </div>
                 <div class="input-area">
                     <div class="input-wrapper">
                         <textarea id="user-input" placeholder="Ask anything about endurance sports..." rows="1"
-                            autocomplete="off"></textarea>
-                        <button class="send-btn" id="send-btn"><i data-lucide="send"></i></button>
+                            maxlength="2000"></textarea>
+                        <button class="send-btn" onclick="sendMessage()"><i data-lucide="send"></i></button>
                     </div>
                     <p class="disclaimer">APEX may produce inaccurate information. Always consult a professional.</p>
                 </div>
@@ -132,39 +129,30 @@
             <div class="dashboard-wrapper" id="dashboard-wrapper" style="display: none;">
                 <!-- Daily Insight -->
                 <div class="apex-card insight-card" id="insight-card">
-                    <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                        <i data-lucide="brain" style="color: var(--apex-primary); width:20px; height:20px;"></i>
-                        <span class="stat-label" style="font-size:0.85rem;">Today's Coaching Insight</span>
-                    </div>
+                    <div class="section-title"><i data-lucide="lightbulb"></i> AI Daily Insight</div>
                     <p id="daily-insight" class="insight-text">Loading insight...</p>
                 </div>
 
-                <!-- Stats Bar -->
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3 class="section-title" style="margin:0;">Performance Summary</h3>
-                    <div class="time-filter-group" style="display:flex; gap: 5px;">
-                        <button class="apex-btn-outline active" onclick="fetchDashboardStats(7)">7 Days</button>
-                        <button class="apex-btn-outline" onclick="fetchDashboardStats(30)">30 Days</button>
-                        <button class="apex-btn-outline" onclick="fetchDashboardStats(90)">90 Days</button>
+                <!-- Period Filter -->
+                <div class="period-filter">
+                    <div class="section-title">📊 Training Overview</div>
+                    <div class="filter-btns">
+                        <button class="apex-btn-outline active" onclick="fetchDashboardStats(7)" id="filter-7">7 Days</button>
+                        <button class="apex-btn-outline" onclick="fetchDashboardStats(30)" id="filter-30">30 Days</button>
+                        <button class="apex-btn-outline" onclick="fetchDashboardStats(90)" id="filter-90">90 Days</button>
                     </div>
                 </div>
+
                 <div class="stats-row" id="stats-bar" style="margin-top: 15px;">
                     <div class="apex-card stat-card">
                         <div class="stat-icon"><i data-lucide="flame"></i></div>
                         <div class="stat-info">
                             <span class="stat-val font-mono" id="val-streak">0</span>
-                            <span class="stat-label">🔥 Current Streak</span>
+                            <span class="stat-label">🔥 Day Streak</span>
                         </div>
                     </div>
                     <div class="apex-card stat-card">
-                        <div class="stat-icon"><i data-lucide="trophy"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-val font-mono" id="val-longest">0</span>
-                            <span class="stat-label">🏆 Longest Streak</span>
-                        </div>
-                    </div>
-                    <div class="apex-card stat-card">
-                        <div class="stat-icon"><i data-lucide="dumbbell"></i></div>
+                        <div class="stat-icon"><i data-lucide="bar-chart-2"></i></div>
                         <div class="stat-info">
                             <span class="stat-val font-mono" id="val-total">0</span>
                             <span class="stat-label">💪 Total Workouts</span>
@@ -180,257 +168,280 @@
                 </div>
 
                 <!-- Profile Stats -->
-                <div class="stats-row" style="margin-top: 1.5rem;">
+                <div class="stats-row" id="profile-bar" style="margin-top: 15px;">
                     <div class="apex-card stat-card">
-                        <div class="stat-icon"><i data-lucide="activity"></i></div>
+                        <div class="stat-icon"><i data-lucide="gauge"></i></div>
                         <div class="stat-info">
-                            <span class="stat-val font-mono" id="val-vdot">--</span>
-                            <span class="stat-label">Current VDOT</span>
+                            <span class="stat-val font-mono" id="val-vdot">-</span>
+                            <span class="stat-label">VDOT</span>
                         </div>
                     </div>
                     <div class="apex-card stat-card">
                         <div class="stat-icon"><i data-lucide="heart"></i></div>
                         <div class="stat-info">
-                            <span class="stat-val font-mono" id="val-hr">-- / --</span>
-                            <span class="stat-label">Rest / Max HR</span>
+                            <span class="stat-val font-mono" id="val-maxhr">-</span>
+                            <span class="stat-label">Max HR</span>
                         </div>
                     </div>
                     <div class="apex-card stat-card">
-                        <div class="stat-icon"><i data-lucide="gauge"></i></div>
+                        <div class="stat-icon"><i data-lucide="heart-pulse"></i></div>
                         <div class="stat-info">
-                            <span class="stat-val font-mono" id="val-form">--</span>
-                            <span class="stat-label" id="form-label">Form (TSB)</span>
-                        </div>
-                    </div>
-                    <div class="apex-card stat-card">
-                        <div class="stat-icon"><i data-lucide="trending-up"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-val font-mono" id="val-ramp">--</span>
-                            <span class="stat-label">Ramp Rate</span>
+                            <span class="stat-val font-mono" id="val-resthr">-</span>
+                            <span class="stat-label">Rest HR</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Workout Heatmap -->
-                <div class="apex-card" style="margin-top: 1.5rem;">
-                    <h3 class="section-title">Training Heatmap</h3>
+                <!-- Heatmap -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">🗓️ Activity Heatmap (Strava)</div>
                     <div id="heatmap-container" class="heatmap-grid"></div>
                 </div>
 
-                <!-- GPX Map Viewer -->
-                <div class="apex-card" style="margin-top: 1.5rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h3 class="section-title" style="margin:0;">🗺️ GPS Track Viewer</h3>
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                            <label for="gpx-upload" class="apex-btn-outline"
-                                style="cursor:pointer; padding:0.4rem 0.8rem; font-size:0.8rem;">
-                                Upload GPX
-                            </label>
-                            <input type="file" id="gpx-upload" accept=".gpx" style="display:none;"
-                                onchange="handleGPXUpload(event)">
-                        </div>
-                    </div>
-                    <div id="map-container"
-                        style="height: 350px; border-radius:10px; margin-top:1rem; border:1px solid var(--apex-border); background:#0a0a0f;">
-                    </div>
+                <!-- Map + GPX Upload -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">🗺️ Route Viewer</div>
+                    <div id="map" style="height: 260px; border-radius: 12px; margin-bottom: 10px;"></div>
+                    <input type="file" id="gpx-upload" accept=".gpx" onchange="handleGPXUpload(event)">
                 </div>
 
-                <!-- Log + Recent -->
-                <div class="dashboard-grid" style="margin-top: 1.5rem;">
-                    <div class="apex-card">
-                        <h3 class="section-title">Log a Workout</h3>
-                        <form id="workout-form" class="workout-form">
-                            <div class="form-group">
-                                <label>Date</label>
-                                <input type="date" id="w-date" required>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Distance (km)</label>
-                                    <input type="number" step="0.1" id="w-dist" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Duration (min)</label>
-                                    <input type="number" id="w-dur" required>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Avg Heart Rate</label>
-                                    <input type="number" id="w-hr" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>RPE (1-10)</label>
-                                    <input type="number" min="1" max="10" id="w-rpe" required>
-                                </div>
-                            </div>
-                            <button type="submit" class="apex-btn" id="submit-workout-btn">Save Workout</button>
-                        </form>
-                    </div>
-                    <div class="apex-card">
-                        <h3 class="section-title">Recent Workouts</h3>
-                        <div id="recent-workouts-list" class="workouts-list">
-                            <p class="text-muted">Loading...</p>
-                        </div>
-                    </div>
+                <!-- Recent Activities -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">🏅 Recent Activities (Strava)</div>
+                    <div id="recent-workouts" class="recent-workouts"></div>
                 </div>
             </div>
 
             <!-- ==================== ANALYTICS VIEW ==================== -->
-            <div class="dashboard-wrapper" id="analytics-wrapper" style="display: none;">
+            <div class="analytics-wrapper" id="analytics-wrapper" style="display: none;">
                 <!-- PMC Chart -->
-                <div class="apex-card" style="margin-bottom: 1.5rem;">
-                    <h3 class="section-title">Performance Management Chart</h3>
-                    <div style="position:relative; height: 300px;">
-                        <canvas id="pmc-chart"></canvas>
+                <div class="apex-card">
+                    <div class="section-title">📈 Performance Management Chart</div>
+                    <canvas id="pmc-chart" height="220"></canvas>
+                    <!-- V4: TSB Interpretation Legend -->
+                    <div class="tsb-guide">
+                        <span class="tsb-item tsb-danger">&lt; -30 Overreaching</span>
+                        <span class="tsb-item tsb-load">-30 to -10 Productive</span>
+                        <span class="tsb-item tsb-maint">-10 to +5 Maintenance</span>
+                        <span class="tsb-item tsb-peak">+5 to +25 Peak Form</span>
+                        <span class="tsb-item tsb-detrain">&gt; +25 Detraining</span>
                     </div>
                 </div>
 
-                <!-- HR Zones -->
-                <div class="dashboard-grid">
-                    <div class="apex-card">
-                        <h3 class="section-title">Heart Rate Zones</h3>
-                        <div id="zone-table"></div>
+                <!-- HR Zone Table -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">❤️ Heart Rate Zones</div>
+                    <table id="zone-table" class="zone-table"></table>
+                </div>
+
+                <!-- Zone Distribution -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">📊 Zone Distribution</div>
+                    <canvas id="zone-chart" height="180"></canvas>
+                </div>
+
+                <!-- V4: Race Predictor — VDOT.co Style -->
+                <div class="apex-card" style="margin-top: 15px;">
+                    <div class="section-title">🏆 Race Predictor (VDOT)</div>
+                    <div class="predictor-input">
+                        <div class="predictor-row">
+                            <div class="pred-field">
+                                <label>Known Race Distance</label>
+                                <select id="pred-known-dist">
+                                    <option value="1">1K</option>
+                                    <option value="1.609">1 Mile</option>
+                                    <option value="3">3K</option>
+                                    <option value="5" selected>5K</option>
+                                    <option value="10">10K</option>
+                                    <option value="21.097">Half Marathon</option>
+                                    <option value="42.195">Marathon</option>
+                                </select>
+                            </div>
+                            <div class="pred-field">
+                                <label>Your Time</label>
+                                <div class="time-input-group">
+                                    <input type="number" id="pred-hours" placeholder="HH" min="0" max="99">
+                                    <span class="time-sep">:</span>
+                                    <input type="number" id="pred-minutes" placeholder="MM" min="0" max="59">
+                                    <span class="time-sep">:</span>
+                                    <input type="number" id="pred-seconds" placeholder="SS" min="0" max="59">
+                                </div>
+                            </div>
+                            <div class="pred-field" style="align-self:flex-end;">
+                                <button class="apex-btn" onclick="predictRaces()">Predict All Distances</button>
+                            </div>
+                        </div>
                     </div>
+                    <div id="predictor-result"></div>
+                </div>
+            </div>
+
+            <!-- ==================== TRAINING PLAN VIEW ==================== -->
+            <div class="plan-wrapper" id="plan-wrapper" style="display: none;">
+                <!-- Plan Header with Adjust button -->
+                <div class="plan-header">
+                    <div class="plan-header-info" id="plan-header-info">
+                        <span>No active plan</span>
+                    </div>
+                    <div class="plan-header-actions">
+                        <button class="apex-btn" onclick="openInterviewModal()" id="btn-generate-plan">
+                            <i data-lucide="plus"></i> Generate Plan
+                        </button>
+                        <button class="apex-btn-outline" onclick="openAdjustDrawer()" id="btn-adjust-plan" style="display:none;">
+                            <i data-lucide="settings-2"></i> Adjust Plan
+                        </button>
+                        <button class="apex-btn-outline" onclick="exportICS()">
+                            <i data-lucide="download"></i> Export .ics
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Plan Preview Table (V4: shown before confirm) -->
+                <div id="plan-preview-container" style="display:none;">
                     <div class="apex-card">
-                        <h3 class="section-title">Zone Distribution</h3>
-                        <div style="position:relative; height: 250px;">
-                            <canvas id="zone-chart"></canvas>
+                        <div class="section-title">📋 Plan Preview — Review Before Confirming</div>
+                        <div class="plan-preview-scroll">
+                            <table class="plan-preview-table" id="plan-preview-table">
+                                <thead>
+                                    <tr>
+                                        <th>Week</th>
+                                        <th>Day</th>
+                                        <th>Type</th>
+                                        <th>Distance</th>
+                                        <th>Duration</th>
+                                        <th>Pace/Zone</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="plan-preview-actions">
+                            <button class="apex-btn" onclick="confirmPlan()"><i data-lucide="check"></i> Confirm & Add to Calendar</button>
+                            <button class="apex-btn-outline" onclick="startOverPlan()"><i data-lucide="x"></i> Start Over</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Race Predictor -->
-                <div class="apex-card" style="margin-top: 1.5rem;">
-                    <h3 class="section-title">🏁 Race Time Predictor</h3>
-                    <div class="form-row" style="margin-bottom: 1rem;">
-                        <div class="form-group">
-                            <label>Known Distance (km)</label>
-                            <input type="number" step="0.1" id="rp-dist" value="5" class="form-input">
+                <!-- Calendar View -->
+                <div id="plan-calendar-container">
+                    <div id="plan-content">
+                        <div class="plan-skeleton" id="plan-skeleton" style="display:none;">
+                            <p>Generating your training plan...</p>
+                            <div class="skeleton-loader"></div>
                         </div>
-                        <div class="form-group">
-                            <label>Finish Time (seconds)</label>
-                            <input type="number" id="rp-time" value="1200" class="form-input">
-                        </div>
-                        <div class="form-group" style="display:flex; align-items:flex-end;">
-                            <button class="apex-btn" onclick="predictRaces()">Predict</button>
-                        </div>
-                    </div>
-                    <div id="race-results" style="display:none;">
-                        <div id="vdot-badge" class="vdot-badge"></div>
-                        <div id="race-table"></div>
+                        <div id="plan-calendar"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- ==================== PLAN VIEW ==================== -->
-            <div class="dashboard-wrapper" id="plan-wrapper" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 class="section-title" style="margin:0;">Training Plan</h2>
-                    <div style="display:flex; gap:0.75rem;">
-                        <button class="apex-btn-outline" id="export-ics-btn" onclick="exportICS()"
-                            style="display:none;">
-                            <i data-lucide="download" style="width:16px; height:16px; margin-right:4px;"></i> Export
-                            .ics
-                        </button>
-                        <button class="apex-btn" onclick="openPlanModal()">
-                            <i data-lucide="sparkles" style="width:16px; height:16px; margin-right:4px;"></i> Generate
-                            AI Plan
-                        </button>
+            <!-- ==================== MODALS ==================== -->
+            <!-- V4: Pre-Plan Interview Modal -->
+            <div class="modal-overlay" id="interview-modal" style="display:none;">
+                <div class="modal-content interview-modal-content">
+                    <div class="modal-header">
+                        <h3><i data-lucide="clipboard-list"></i> Plan Setup — Tell Us About You</h3>
+                        <button class="modal-close" onclick="closeInterviewModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="interview-grid">
+                            <div class="form-group full-width">
+                                <label>Goal Race *</label>
+                                <input type="text" id="iv-goal" placeholder='e.g. "Sub-20 5K" or "Boston Qualifier"' required>
+                            </div>
+                            <div class="form-group">
+                                <label>Target Race Date *</label>
+                                <input type="date" id="iv-target-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Plan Start Date *</label>
+                                <input type="date" id="iv-start-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Days per week *</label>
+                                <input type="number" id="iv-days" value="5" min="1" max="7">
+                            </div>
+                            <div class="form-group">
+                                <label>Hours per week *</label>
+                                <input type="number" id="iv-hours" value="8" min="1" max="30">
+                            </div>
+                            <div class="form-group">
+                                <label>Experience Level *</label>
+                                <select id="iv-experience">
+                                    <option value="beginner">Beginner</option>
+                                    <option value="intermediate" selected>Intermediate</option>
+                                    <option value="advanced">Advanced</option>
+                                    <option value="elite">Elite</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Current Weekly Mileage (km)</label>
+                                <input type="number" id="iv-weekly-km" placeholder="e.g. 50">
+                            </div>
+                            <div class="form-group">
+                                <label>5K PB (MM:SS)</label>
+                                <input type="text" id="iv-pb-5k" placeholder="19:45">
+                            </div>
+                            <div class="form-group">
+                                <label>10K PB (MM:SS)</label>
+                                <input type="text" id="iv-pb-10k" placeholder="41:30">
+                            </div>
+                            <div class="form-group">
+                                <label>Half Marathon PB (H:MM:SS)</label>
+                                <input type="text" id="iv-pb-hm" placeholder="1:32:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Marathon PB (H:MM:SS)</label>
+                                <input type="text" id="iv-pb-marathon" placeholder="3:25:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Other PB</label>
+                                <input type="text" id="iv-pb-other" placeholder="50K trail in 5:30:00">
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Injury / Limitations</label>
+                                <textarea id="iv-injury" placeholder="e.g. Right IT band issue" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="apex-btn" onclick="submitInterview()"><i data-lucide="sparkles"></i> Generate Plan</button>
                     </div>
                 </div>
-                <div id="active-plan-header" class="text-muted" style="margin-bottom: 1rem;">
-                    No active plan. Click "Generate AI Plan" to create one.
+            </div>
+
+            <!-- V4: Plan Adjust Drawer -->
+            <div class="adjust-drawer" id="adjust-drawer" style="display:none;">
+                <div class="adjust-drawer-header">
+                    <h3>Adjust Plan</h3>
+                    <button class="modal-close" onclick="closeAdjustDrawer()">&times;</button>
                 </div>
-                <div id="plan-calendar" class="plan-calendar" style="display: none;"></div>
+                <div class="adjust-drawer-chat" id="adjust-chat-container"></div>
+                <div class="adjust-drawer-input">
+                    <div class="input-wrapper">
+                        <textarea id="adjust-input" placeholder="e.g. Move Tuesday to Wednesday..." rows="1"></textarea>
+                        <button class="send-btn" onclick="sendAdjustMessage()"><i data-lucide="send"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workout Detail Modal -->
+            <div class="modal-overlay" id="workout-detail-modal" style="display:none;">
+                <div class="modal-content workout-modal-content">
+                    <div class="modal-header">
+                        <h3 id="wd-title">Workout Detail</h3>
+                        <button class="modal-close" onclick="closeWorkoutDetail()">&times;</button>
+                    </div>
+                    <div class="modal-body" id="wd-body"></div>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- Plan Modal -->
-    <div id="plan-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content apex-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h3 style="margin:0;">Generate AI Training Plan</h3>
-                <button class="icon-btn" onclick="closePlanModal()" style="width:30px;height:30px;"><i
-                        data-lucide="x"></i></button>
-            </div>
-            <form id="plan-form" class="workout-form">
-                <div class="form-group">
-                    <label>Target Goal</label>
-                    <input type="text" id="p-goal" required placeholder="Sub-20 minute 5k" class="form-input">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Race Date</label>
-                        <input type="date" id="p-date" required class="form-input">
-                    </div>
-                    <div class="form-group">
-                        <label>Weekly Hours</label>
-                        <input type="number" step="0.5" id="p-hours" required placeholder="8" class="form-input">
-                    </div>
-                </div>
-                <button type="submit" class="apex-btn" id="generate-plan-btn">Generate Plan</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- ==================== WORKOUT DETAIL MODAL ==================== -->
-    <div id="workout-detail-modal" class="modal-overlay" style="display:none; z-index: 100000;">
-        <div class="modal-content" style="max-width: 700px; padding:0; background: var(--apex-card);">
-            <div class="modal-header"
-                style="display:flex; justify-content:space-between; align-items:center; padding: 20px; border-bottom: 1px solid var(--apex-border);">
-                <div style="display:flex; align-items:center; gap: 15px;">
-                    <div id="wd-icon"
-                        style="background:var(--apex-primary); width:40px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size: 20px;">
-                    </div>
-                    <div>
-                        <h2 id="wd-title" style="margin:0; font-size:1.2rem;">Workout Name</h2>
-                        <div id="wd-date" style="color:var(--apex-muted); font-size: 0.9rem;">Date</div>
-                    </div>
-                </div>
-                <button class="icon-btn" onclick="closeWorkoutDetail()"><i data-lucide="x"></i></button>
-            </div>
-
-            <div style="padding: 20px;">
-                <div class="stats-row" style="margin-bottom: 20px;">
-                    <div class="stat-card"
-                        style="background: var(--apex-card-alt); border-radius: 8px; padding: 15px; text-align:center; flex:1;">
-                        <div id="wd-dist" style="font-size: 1.5rem; font-weight:bold; color:var(--apex-text);">--</div>
-                        <div style="font-size:0.8rem; color:var(--apex-muted);">Distance</div>
-                    </div>
-                    <div class="stat-card"
-                        style="background: var(--apex-card-alt); border-radius: 8px; padding: 15px; text-align:center; flex:1;">
-                        <div id="wd-time" style="font-size: 1.5rem; font-weight:bold; color:var(--apex-text);">--</div>
-                        <div style="font-size:0.8rem; color:var(--apex-muted);">Time</div>
-                    </div>
-                    <div class="stat-card"
-                        style="background: var(--apex-card-alt); border-radius: 8px; padding: 15px; text-align:center; flex:1;">
-                        <div id="wd-pace" style="font-size: 1.5rem; font-weight:bold; color:var(--apex-text);">--</div>
-                        <div style="font-size:0.8rem; color:var(--apex-muted);">Avg HR</div>
-                    </div>
-                </div>
-
-                <div id="wd-map-container"
-                    style="height:250px; background:#111; border-radius:8px; display:none; margin-bottom: 20px; border:1px solid var(--apex-border);">
-                </div>
-
-                <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div>
-                        <h4 style="margin-bottom: 10px; font-size:1rem; color:var(--apex-text);">Heart Rate Chart</h4>
-                        <canvas id="wd-hr-chart" height="150"></canvas>
-                    </div>
-                    <div>
-                        <h4 style="margin-bottom: 10px; font-size:1rem; color:var(--apex-text);">Time in Zones</h4>
-                        <div id="wd-zone-bars"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="/app.js"></script>
-    <script>lucide.createIcons();</script>
+    <script>
+        lucide.createIcons();
+    </script>
 </body>
 
 </html>

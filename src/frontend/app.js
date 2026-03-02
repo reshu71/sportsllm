@@ -1,122 +1,164 @@
-// ── APEX V2 — Frontend Application ─────────────────────────────────────
+// ── APEX V4 — Frontend Application ─────────────────────────────────────
 // State
-let chatHistory = [];
+let currentChatMode = 'ask';
+let chatHistories = { ask: [], analyze: [], plan: [] };
 let pmcChart = null;
 let zoneChart = null;
+let currentPlanJSON = null;    // V4: Holds plan JSON before confirm
+let currentPlanMeta = null;    // V4: Holds plan metadata (goal, dates, etc.)
+let currentDashboardPeriod = 30;
+let cachedHeatmapGrid = null;  // V4: Cached full heatmap for period slicing
+
+const SUGGESTED_PROMPTS = {
+    ask: [
+        { text: "What's the best way to improve my lactate threshold?", short: "Lactate Threshold" },
+        { text: "How should I fuel for a 3-hour long run?", short: "Long Run Fuel" },
+        { text: "Explain the 80/20 training method", short: "80/20 Method" },
+        { text: "What does CTL mean and how should I interpret mine?", short: "CTL Explained" },
+    ],
+    analyze: [
+        { text: "What does my training load look like over the past 6 weeks?", short: "6-Week Load" },
+        { text: "Am I overreaching right now?", short: "Overreaching?" },
+        { text: "Where am I spending most of my training time by zone?", short: "Zone Distribution" },
+        { text: "How does my fitness compare to 3 months ago?", short: "Fitness Trend" },
+    ],
+    plan: [
+        { text: "Build me a 16-week marathon plan", short: "Marathon Plan" },
+        { text: "I can only run 5 days this week, adjust my plan", short: "Adjust Week" },
+        { text: "Add a taper in the final 2 weeks", short: "Add Taper" },
+        { text: "Shift all Wednesday sessions to Thursday", short: "Move Sessions" },
+    ],
+};
 
 // ── Tab Switching ──────────────────────────────────────────────────────
 function switchTab(tab) {
-    // Hide all wrappers
-    document.getElementById('chat-wrapper').style.display = 'none';
-    document.getElementById('dashboard-wrapper').style.display = 'none';
-    document.getElementById('analytics-wrapper').style.display = 'none';
-    document.getElementById('plan-wrapper').style.display = 'none';
-
-    // Deactivate all tabs
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-
-    // Show selected wrapper + set active tab
-    const titles = {
-        chat: ['AI Coach', 'Ask me about running, cycling, triathlon, or swimming'],
-        dashboard: ['Athlete Dashboard', 'Your fitness at a glance'],
-        analytics: ['Analytics', 'Performance insights & predictions'],
-        plan: ['Training Plan', 'AI-generated periodized schedules'],
-    };
-    const el = tab === 'chat' ? 'chat-wrapper' :
-        tab === 'dashboard' ? 'dashboard-wrapper' :
-            tab === 'analytics' ? 'analytics-wrapper' : 'plan-wrapper';
-    document.getElementById(el).style.display = tab === 'chat' ? 'flex' : 'block';
     document.getElementById(`tab-${tab}`).classList.add('active');
+
+    const views = ['chat-wrapper', 'dashboard-wrapper', 'analytics-wrapper', 'plan-wrapper'];
+    views.forEach(v => {
+        const el = document.getElementById(v);
+        if (el) el.style.display = 'none';
+    });
+
+    const titles = {
+        chat: ['AI Coach', 'RAG-powered endurance coaching'],
+        dashboard: ['Dashboard', 'Strava-synced training overview'],
+        analytics: ['Analytics', 'Performance metrics & race predictions'],
+        plan: ['Training Plan', 'AI-generated periodized training']
+    };
     document.getElementById('page-title').textContent = titles[tab][0];
     document.getElementById('page-subtitle').textContent = titles[tab][1];
 
-    // Hide focus areas when not on Coach tab
-    const focusSection = document.getElementById('focus-areas-section');
-    const sourcesSection = document.getElementById('sources-section');
-    if (focusSection) focusSection.style.display = tab === 'chat' ? '' : 'none';
-    if (sourcesSection) sourcesSection.style.display = tab === 'chat' ? '' : 'none';
-
-    // Load data
-    if (tab === 'dashboard') loadDashboard();
-    if (tab === 'analytics') loadAnalytics();
-    if (tab === 'plan') loadPlan();
-}
-
-// ── Dashboard Loading ──────────────────────────────────────────────────
-async function loadDashboard() {
-    try {
-        const [profileRes, heatmapRes, pmcRes] = await Promise.all([
-            fetch('/api/profile').then(r => r.json()),
-            fetch('/api/analytics/heatmap').then(r => r.json()),
-            fetch('/api/analytics/pmc').then(r => r.json()),
-        ]);
-
-        const p = profileRes.profile || {};
-        document.getElementById('val-vdot').textContent = (p.current_vdot || 0).toFixed(1);
-        document.getElementById('val-hr').textContent = `${p.resting_hr || '--'} / ${p.max_hr || '--'}`;
-
-        const si = document.getElementById('syncIndicator');
-        if (p.strava_connected) {
-            si.innerHTML = '<span class="sync-dot"></span> <span style="color:var(--apex-success);font-size:0.8rem;">Live Sync</span>';
-        }
-
-        const latest = pmcRes.latest || {};
-        document.getElementById('val-form').textContent = latest.tsb != null ? latest.tsb.toFixed(1) : '--';
-        const formBadge = document.getElementById('form-label');
-        if (pmcRes.form === 'Fresh') formBadge.style.color = '#42a5f5';
-        else if (pmcRes.form === 'Optimal') formBadge.style.color = 'var(--apex-success)';
-        else if (pmcRes.form === 'High Risk') formBadge.style.color = 'var(--apex-danger)';
-        formBadge.textContent = `Form · ${pmcRes.form || '--'}`;
-        document.getElementById('val-ramp').textContent = pmcRes.ramp_rate != null ? pmcRes.ramp_rate : '--';
-
-        renderHeatmap(heatmapRes.grid || []);
-        const loadText = document.getElementById('daily-insight');
-        if (latest.tsb < -25) {
-            loadText.innerHTML = "<strong>🔥 Coach Focus:</strong> High fatigue detected (TSB < -25). Prioritize Zone 1 active recovery or complete rest today to prevent overtraining.";
-        } else if (latest.tsb > 15) {
-            loadText.innerHTML = "<strong>⚡ Coach Focus:</strong> High freshness (TSB > 15). You are primed for a breakthrough interval session, FTP test, or race simulation.";
-        } else {
-            loadText.innerHTML = "<strong>✅ Coach Focus:</strong> Optimal base training zone. Keep accumulating volume with consistent 80/20 polarized efforts.";
-        }
-
-        loadDailyInsight(); // Appends AI insight as well
-        initMap();
-
-        // Load default 30 days stats summary
-        await fetchDashboardStats(30);
-
-    } catch (e) {
-        console.error('Dashboard load error:', e);
+    if (tab === 'chat') {
+        document.getElementById('chat-wrapper').style.display = 'flex';
+    } else if (tab === 'dashboard') {
+        document.getElementById('dashboard-wrapper').style.display = 'block';
+        loadDashboard();
+    } else if (tab === 'analytics') {
+        document.getElementById('analytics-wrapper').style.display = 'block';
+        loadAnalytics();
+    } else if (tab === 'plan') {
+        document.getElementById('plan-wrapper').style.display = 'block';
+        loadPlan();
     }
 }
 
-async function fetchDashboardStats(days = 30) {
-    document.querySelectorAll('.time-filter-group button').forEach(b => b.classList.remove('active'));
-    const btn = document.querySelector(`.time-filter-group button[onclick="fetchDashboardStats(${days})"]`);
+// ── V4: Chat Mode Switching ────────────────────────────────────────────
+function switchChatMode(mode) {
+    currentChatMode = mode;
+    document.querySelectorAll('.chat-mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.chat-mode-btn[data-mode="${mode}"]`).classList.add('active');
+
+    // Update prompt chips
+    const chipsEl = document.getElementById('prompt-chips');
+    chipsEl.innerHTML = SUGGESTED_PROMPTS[mode].map(p =>
+        `<button class="prompt-chip" onclick="setPrompt('${p.text.replace(/'/g, "\\'")}')">${p.short}</button>`
+    ).join('');
+
+    // Show/hide welcome or history
+    const container = document.getElementById('chat-container');
+    const welcome = document.getElementById('welcome-screen');
+    const history = chatHistories[mode];
+
+    container.innerHTML = '';
+    if (history.length === 0) {
+        container.appendChild(welcome);
+        welcome.style.display = 'flex';
+        // Refresh icons
+        chipsEl.innerHTML = SUGGESTED_PROMPTS[mode].map(p =>
+            `<button class="prompt-chip" onclick="setPrompt('${p.text.replace(/'/g, "\\'")}')">${p.short}</button>`
+        ).join('');
+    } else {
+        welcome.style.display = 'none';
+        history.forEach(msg => {
+            const div = createMessageDiv(msg.role, msg.content);
+            container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Update placeholder
+    const placeholders = {
+        ask: "Ask anything about endurance sports...",
+        analyze: "Ask about your training data, trends, recovery...",
+        plan: "Build or modify your training plan..."
+    };
+    document.getElementById('user-input').placeholder = placeholders[mode];
+    lucide.createIcons();
+}
+
+// ── Dashboard Loading ──────────────────────────────────────────────────
+function loadDashboard() {
+    fetchDashboardStats(currentDashboardPeriod);
+    loadDailyInsight();
+
+    // Fetch profile
+    fetch('/api/profile').then(r => r.json()).then(data => {
+        const p = data.profile;
+        document.getElementById('val-vdot').textContent = p.current_vdot || '-';
+        document.getElementById('val-maxhr').textContent = p.max_hr || '-';
+        document.getElementById('val-resthr').textContent = p.resting_hr || '-';
+        // Strava status
+        if (p.strava_connected) {
+            document.getElementById('stravaStatus').innerHTML =
+                `<span class="sync-dot"></span> Connected as <strong>${p.name || 'Athlete'}</strong>`;
+        }
+    }).catch(() => { });
+
+    // Init map
+    if (!map) initMap();
+}
+
+function fetchDashboardStats(days = 30) {
+    currentDashboardPeriod = days;
+    // Update filter buttons
+    document.querySelectorAll('.filter-btns .apex-btn-outline').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`filter-${days}`);
     if (btn) btn.classList.add('active');
 
-    try {
-        const workoutsRes = await fetch(`/api/workouts?period=${days}`).then(r => r.json());
-        const workouts = workoutsRes.workouts || [];
+    // Fetch stats
+    fetch(`/api/stats/streaks`).then(r => r.json()).then(data => {
+        document.getElementById('val-streak').textContent = data.current_streak || 0;
+        document.getElementById('val-total').textContent = data.total_workouts || 0;
+        document.getElementById('val-weekly-tss').textContent = data.weekly_tss || 0;
+    }).catch(() => { });
 
-        const totalDist = workouts.reduce((s, w) => s + parseFloat(w.distance_meters || 0), 0) / 1000;
-        const totalDurSec = workouts.reduce((s, w) => s + (w.duration_seconds || 0), 0);
-        const totalTss = workouts.reduce((s, w) => s + (w.tss || 0), 0);
+    // Fetch workouts (Strava-only by default)
+    fetch(`/api/workouts?period=${days}&source=strava`).then(r => r.json()).then(data => {
+        window._dashboardWorkouts = data.workouts || [];
+        renderRecentWorkouts(data.workouts || []);
+    }).catch(() => { });
 
-        document.getElementById('val-streak').textContent = `${workouts.length}`;
-        document.getElementById('val-streak').nextElementSibling.textContent = '🏃 Activities';
-
-        document.getElementById('val-longest').textContent = `${totalDist.toFixed(1)}`;
-        document.getElementById('val-longest').nextElementSibling.textContent = '📏 Distance (km)';
-
-        document.getElementById('val-total').textContent = `${Math.floor(totalDurSec / 3600)}h ${Math.round((totalDurSec % 3600) / 60)}m`;
-        document.getElementById('val-total').nextElementSibling.textContent = '⏱️ Training Time';
-
-        document.getElementById('val-weekly-tss').textContent = `${totalTss.toFixed(0)}`;
-        document.getElementById('val-weekly-tss').nextElementSibling.textContent = '⚡ Total TSS';
-
-        renderRecentWorkouts(workouts.slice(0, 10));
-    } catch (e) { console.error('Stats fetch err: ', e); }
+    // Fetch and cache full heatmap, then slice for period
+    if (!cachedHeatmapGrid) {
+        fetch('/api/analytics/heatmap').then(r => r.json()).then(data => {
+            cachedHeatmapGrid = data.grid || [];
+            renderHeatmap(cachedHeatmapGrid, days);
+        }).catch(() => { });
+    } else {
+        renderHeatmap(cachedHeatmapGrid, days);
+    }
 }
 
 // ── Map Viewer (Leaflet) ───────────────────────────────────────────────
@@ -124,245 +166,177 @@ let map = null;
 let trackLayer = null;
 
 function initMap() {
-    if (!map && document.getElementById('map-container')) {
-        map = L.map('map-container').setView([0, 0], 2);
+    try {
+        map = L.map('map').setView([20, 0], 2);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
+            attribution: '©OpenStreetMap ©CARTO', maxZoom: 19
         }).addTo(map);
-    }
+    } catch (e) { }
 }
 
-async function handleGPXUpload(event) {
+function handleGPXUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     const formData = new FormData();
     formData.append('file', file);
-
-    try {
-        const res = await fetch('/api/workouts/upload-gpx', {
-            method: 'POST',
-            body: formData
-        }).then(r => r.json());
-
-        if (res.status === 'success' && res.coordinates.length > 0) {
-            if (trackLayer) map.removeLayer(trackLayer); // remove old route
-
-            // Draw new polyline
-            trackLayer = L.polyline(res.coordinates, {
-                color: 'var(--apex-primary)',
-                weight: 4,
-                opacity: 0.8,
-                lineCap: 'round',
-                lineJoin: 'round'
-            }).addTo(map);
-
-            // Auto fit bounds to the route
-            map.fitBounds(trackLayer.getBounds(), { padding: [20, 20] });
-        } else {
-            alert('No GPS points found in GPX file.');
-        }
-    } catch (err) {
-        console.error('GPX upload failed:', err);
-        alert('Failed to parse GPX file. See console for details.');
-    } finally {
-        event.target.value = ''; // Reset input
-    }
+    fetch('/api/workouts/upload-gpx', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.coordinates?.length) {
+                if (trackLayer) map.removeLayer(trackLayer);
+                trackLayer = L.polyline(data.coordinates, {
+                    color: '#00d4ff', weight: 3, opacity: 0.9
+                }).addTo(map);
+                map.fitBounds(trackLayer.getBounds(), { padding: [30, 30] });
+            }
+        })
+        .catch(err => console.error('GPX upload failed:', err));
 }
 
-async function loadDailyInsight() {
-    try {
-        const res = await fetch('/api/coach/daily-insight').then(r => r.json());
-        const insightEl = document.getElementById('daily-insight');
-        insightEl.innerHTML += `<br><br><span style="color:var(--apex-muted); font-size:0.85rem;">🤖 AI Analysis: ${res.insight}</span>`;
-    } catch {
-        console.warn('Could not load AI insight.');
-    }
+function loadDailyInsight() {
+    fetch('/api/coach/daily-insight').then(r => r.json()).then(data => {
+        document.getElementById('daily-insight').textContent = data.insight;
+    }).catch(() => {
+        document.getElementById('daily-insight').textContent = 'Could not load insight.';
+    });
 }
 
-function renderHeatmap(grid) {
+// V4: Heatmap with period-aware rendering
+function renderHeatmap(grid, periodDays = 365) {
     const container = document.getElementById('heatmap-container');
+    if (!container) return;
     container.innerHTML = '';
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const periodCutoff = new Date(today);
+    periodCutoff.setDate(today.getDate() - periodDays);
+
     grid.forEach(cell => {
-        const div = document.createElement('div');
-        div.className = 'heatmap-cell';
+        const el = document.createElement('div');
+        el.className = 'heatmap-cell';
         const tss = cell.tss || 0;
-        const color = tss === 0 ? '#1a1a2e' :
-            tss <= 30 ? '#1a472a' :
-                tss <= 60 ? '#2d6a4f' :
-                    tss <= 100 ? '#52b788' : '#95d5b2';
-        div.style.backgroundColor = color;
-        div.title = `${cell.date}: ${tss.toFixed(0)} TSS`;
-        container.appendChild(div);
+        const cellDate = new Date(cell.date);
+        const inPeriod = cellDate >= periodCutoff;
+
+        if (tss === 0) {
+            el.style.background = 'rgba(255,255,255,0.03)';
+        } else if (tss < 30) {
+            el.style.background = inPeriod ? 'rgba(0,212,255,0.2)' : 'rgba(255,255,255,0.04)';
+        } else if (tss < 70) {
+            el.style.background = inPeriod ? 'rgba(0,212,255,0.45)' : 'rgba(255,255,255,0.06)';
+        } else if (tss < 120) {
+            el.style.background = inPeriod ? 'rgba(0,212,255,0.7)' : 'rgba(255,255,255,0.08)';
+        } else {
+            el.style.background = inPeriod ? '#00d4ff' : 'rgba(255,255,255,0.1)';
+        }
+        if (!inPeriod) el.style.opacity = '0.35';
+        el.title = `${cell.date}: TSS ${tss}`;
+        container.appendChild(el);
     });
 }
 
 window._dashboardWorkouts = [];
 
 function renderRecentWorkouts(workouts) {
-    window._dashboardWorkouts = workouts; // Store for modal
-    const container = document.getElementById('recent-workouts-list');
+    const container = document.getElementById('recent-workouts');
+    if (!container) return;
     if (!workouts.length) {
-        container.innerHTML = '<p class="text-muted" style="padding: 20px; text-align: center;">No activities found in this period.</p>';
+        container.innerHTML = '<p style="color:var(--apex-muted);">No Strava activities yet. Connect Strava to sync.</p>';
         return;
     }
-    container.innerHTML = workouts.map(w => {
-        const dist = ((w.distance_meters || 0) / 1000).toFixed(1);
-        const dur = Math.round((w.duration_seconds || 0) / 60);
-        let icon = '🏃';
-        const sport = String(w.sport_category || w.sport || 'Run').toLowerCase();
-        if (sport.includes('bike') || sport.includes('cycl')) icon = '🚴';
-        if (sport.includes('swim')) icon = '🏊';
-        if (sport.includes('flex') || sport.includes('yoga')) icon = '🧘';
-        if (sport.includes('train') || sport.includes('weight')) icon = '🏋️';
+    container.innerHTML = workouts.slice(0, 15).map((w, i) => {
+        const dist = w.distance_meters ? (w.distance_meters / 1000).toFixed(1) : null;
+        const dur = w.duration_seconds ? Math.round(w.duration_seconds / 60) : 0;
+        const sport = w.sport_type || w.sport || 'Workout';
+        const name = w.name || sport;
+        // V4: Badges for suffer_score, PR count
+        let badges = '';
+        if (w.suffer_score) badges += `<span class="badge badge-effort">⚡${w.suffer_score}</span>`;
+        if (w.pr_count > 0) badges += `<span class="badge badge-pr">🏅 ${w.pr_count} PR${w.pr_count > 1 ? 's' : ''}</span>`;
+        if (w.achievement_count > 0) badges += `<span class="badge badge-ach">🏆 ${w.achievement_count}</span>`;
 
-        const title = w.title || `${icon} ${sport.charAt(0).toUpperCase() + sport.slice(1)}`;
-
-        return `
-        <div class="workout-item stats-card" onclick="showWorkoutDetail(${w.id})" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; padding: 15px; margin-bottom: 10px; border-radius: 8px; background: var(--apex-card-alt); border: 1px solid var(--apex-border); transition: all 0.2s;">
-            <div class="w-meta">
-                <div class="w-title" style="font-weight: 600; font-size: 1rem; color: var(--apex-primary);">${icon} ${title}</div>
-                <div class="w-sub" style="font-size: 0.8rem; color: var(--apex-muted); margin-top: 4px;">
-                    ${w.date} • ${dur} min • ${w.avg_hr ? w.avg_hr + ' bpm' : '-- bpm'}
-                </div>
+        return `<div class="workout-card" onclick="showWorkoutDetail(${w.id})">
+            <div class="wc-top"><strong>${name}</strong> <span class="wc-date">${w.date}</span></div>
+            <div class="wc-stats">
+                ${dist ? `<span>📏 ${dist} km</span>` : ''}
+                <span>⏱ ${dur} min</span>
+                ${w.avg_hr ? `<span>❤️ ${w.avg_hr} bpm</span>` : ''}
+                ${w.tss ? `<span>📊 TSS ${Math.round(w.tss)}</span>` : ''}
             </div>
-            <div class="w-metric" style="text-align: right;">
-                <div class="w-dist" style="font-size: 1.1rem; font-weight: bold; color: var(--apex-text);">${w.distance_meters > 0 ? dist + ' km' : ''}</div>
-                <div class="w-tss" style="font-size: 0.8rem; color: var(--apex-warning);">${(w.tss || 0).toFixed(0)} TSS</div>
-            </div>
+            ${badges ? `<div class="wc-badges">${badges}</div>` : ''}
         </div>`;
     }).join('');
 }
 
 let wdHrChart = null;
+
 function showWorkoutDetail(workoutId) {
     const w = window._dashboardWorkouts.find(x => x.id === workoutId);
     if (!w) return;
 
-    document.getElementById('wd-title').textContent = w.title || (w.sport_category || w.sport || 'Workout');
-    document.getElementById('wd-date').textContent = w.date;
+    document.getElementById('workout-detail-modal').style.display = 'flex';
+    document.getElementById('wd-title').textContent = w.name || w.sport_type || 'Workout';
 
-    let icon = '🏃';
-    const sport = String(w.sport_category || w.sport || 'Run').toLowerCase();
-    if (sport.includes('bike') || sport.includes('cycl')) icon = '🚴';
-    if (sport.includes('swim')) icon = '🏊';
-    if (sport.includes('flex') || sport.includes('yoga')) icon = '🧘';
-    if (sport.includes('train') || sport.includes('weight')) icon = '🏋️';
-    document.getElementById('wd-icon').textContent = icon;
+    const dist = w.distance_meters ? (w.distance_meters / 1000).toFixed(2) : 'N/A';
+    const dur = w.duration_seconds ? `${Math.floor(w.duration_seconds / 60)}:${String(Math.round(w.duration_seconds % 60)).padStart(2, '0')}` : 'N/A';
+    const pace = w.distance_meters && w.duration_seconds
+        ? `${Math.floor(w.duration_seconds / (w.distance_meters / 1000) / 60)}:${String(Math.round((w.duration_seconds / (w.distance_meters / 1000)) % 60)).padStart(2, '0')} /km`
+        : 'N/A';
 
-    document.getElementById('wd-dist').textContent = w.distance_meters ? ((w.distance_meters) / 1000).toFixed(2) : '--';
+    let html = `
+        <div class="wd-stats-grid">
+            <div class="wd-stat"><span class="wd-label">Date</span><span class="wd-val">${w.date}</span></div>
+            <div class="wd-stat"><span class="wd-label">Sport</span><span class="wd-val">${w.sport_type || w.sport || 'N/A'}</span></div>
+            <div class="wd-stat"><span class="wd-label">Distance</span><span class="wd-val">${dist} km</span></div>
+            <div class="wd-stat"><span class="wd-label">Duration</span><span class="wd-val">${dur}</span></div>
+            <div class="wd-stat"><span class="wd-label">Avg Pace</span><span class="wd-val">${pace}</span></div>
+            <div class="wd-stat"><span class="wd-label">Avg HR</span><span class="wd-val">${w.avg_hr || 'N/A'} bpm</span></div>
+            <div class="wd-stat"><span class="wd-label">Max HR</span><span class="wd-val">${w.max_hr || 'N/A'} bpm</span></div>
+            <div class="wd-stat"><span class="wd-label">TSS</span><span class="wd-val">${w.tss ? Math.round(w.tss) : 'N/A'}</span></div>
+            <div class="wd-stat"><span class="wd-label">Elevation</span><span class="wd-val">${w.elevation_gain_m || 0}m</span></div>
+            <div class="wd-stat"><span class="wd-label">Cadence</span><span class="wd-val">${w.avg_cadence || 'N/A'} spm</span></div>
+            ${w.suffer_score ? `<div class="wd-stat"><span class="wd-label">Rel. Effort</span><span class="wd-val">${w.suffer_score}</span></div>` : ''}
+            ${w.pr_count ? `<div class="wd-stat"><span class="wd-label">PRs</span><span class="wd-val">🏅 ${w.pr_count}</span></div>` : ''}
+        </div>
+        <div style="margin-top:15px;"><canvas id="wd-hr-chart" height="120"></canvas></div>
+    `;
 
-    const h = Math.floor((w.duration_seconds || 0) / 3600);
-    const m = Math.floor(((w.duration_seconds || 0) % 3600) / 60);
-    document.getElementById('wd-time').textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    document.getElementById('wd-body').innerHTML = html;
 
-    document.getElementById('wd-pace').textContent = w.avg_hr ? w.avg_hr : '--';
-
-    // GPX Map
-    const mapContainer = document.getElementById('wd-map-container');
-    const lapsData = w.laps_json;
-    if (lapsData && lapsData !== '[]' && lapsData.length > 5) {
-        mapContainer.style.display = 'block';
-        try {
-            const rawCoords = JSON.parse(lapsData);
-            if (!window.wdMap) {
-                window.wdMap = L.map('wd-map-container').setView([0, 0], 2);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(window.wdMap);
-            }
-            if (window.wdTrackLayer) window.wdMap.removeLayer(window.wdTrackLayer);
-
-            window.wdTrackLayer = L.polyline(rawCoords, {
-                color: 'var(--apex-primary)', weight: 4, opacity: 0.8, lineCap: 'round', lineJoin: 'round'
-            }).addTo(window.wdMap);
-
-            // Fix map size bug when display changes from none to block
-            setTimeout(() => {
-                window.wdMap.invalidateSize();
-                window.wdMap.fitBounds(window.wdTrackLayer.getBounds(), { padding: [20, 20] });
-            }, 50);
-        } catch (e) {
-            console.error("Map plot detail fail", e);
-            mapContainer.style.display = 'none';
-        }
-    } else {
-        mapContainer.style.display = 'none';
-    }
-
-    // HR Chart
-    const hrDataStr = w.hr_stream;
-    const timeDataStr = w.time_stream;
-
-    if (wdHrChart) wdHrChart.destroy();
-    document.getElementById('wd-zone-bars').innerHTML = '';
-
-    if (hrDataStr && timeDataStr && hrDataStr !== '[]' && hrDataStr.length > 5) {
-        try {
-            const hrList = JSON.parse(hrDataStr);
-            const timeList = JSON.parse(timeDataStr);
-
-            // Build Line Chart
-            const ctx = document.getElementById('wd-hr-chart');
-            wdHrChart = new Chart(ctx, {
+    // HR chart from stream
+    setTimeout(() => {
+        let hrData = [];
+        let timeData = [];
+        try { hrData = JSON.parse(w.hr_stream || '[]'); } catch (e) { }
+        try { timeData = JSON.parse(w.time_stream || '[]'); } catch (e) { }
+        if (hrData.length > 0) {
+            if (wdHrChart) wdHrChart.destroy();
+            const step = Math.max(1, Math.floor(hrData.length / 200));
+            const hrSampled = hrData.filter((_, i) => i % step === 0);
+            const labels = hrSampled.map((_, i) => '');
+            wdHrChart = new Chart(document.getElementById('wd-hr-chart'), {
                 type: 'line',
                 data: {
-                    labels: timeList.map(t => Math.round(t / 60)), // minutes
+                    labels,
                     datasets: [{
-                        label: 'Heart Rate',
-                        data: hrList,
-                        borderColor: '#ff5252',
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        fill: true,
-                        backgroundColor: 'rgba(255, 82, 82, 0.1)'
+                        label: 'Heart Rate', data: hrSampled,
+                        borderColor: '#ff6b6b', borderWidth: 1.5,
+                        pointRadius: 0, fill: true,
+                        backgroundColor: 'rgba(255,107,107,0.08)'
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { display: false },
-                        y: { min: Math.max(50, Math.min(...hrList) - 10) }
-                    },
-                    interaction: { intersect: false, mode: 'index' }
+                        y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
                 }
             });
-
-            // Build Zone Bars matching Strava
-            // Using generic max 190, rest 50 for quick modal
-            const max = 190; const rest = 50; const hrr = max - rest;
-            const z1 = rest + hrr * 0.5; const z2 = rest + hrr * 0.6; const z3 = rest + hrr * 0.7; const z4 = rest + hrr * 0.8; const z5 = rest + hrr * 0.9;
-            let counts = [0, 0, 0, 0, 0];
-            hrList.forEach(hr => {
-                if (hr < z2) counts[0]++; else if (hr < z3) counts[1]++; else if (hr < z4) counts[2]++; else if (hr < z5) counts[3]++; else counts[4]++;
-            });
-            const total = counts.reduce((a, b) => a + b, 0) || 1;
-            const colors = ['#8892b0', '#52b788', '#f5c842', '#ff9800', '#ff5252'];
-            const labels = ['Z1 Endurance', 'Z2 Moderate', 'Z3 Tempo', 'Z4 Threshold', 'Z5 Anaerobic'];
-
-            let zoneHtml = '';
-            for (let i = 4; i >= 0; i--) {
-                const pct = (counts[i] / total) * 100;
-                zoneHtml += `
-                <div style="margin-bottom: 8px;">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--apex-muted); margin-bottom:2px;">
-                        <span>${labels[i]}</span>
-                        <span>${Math.round(counts[i] / 60)}m (${pct.toFixed(0)}%)</span>
-                    </div>
-                    <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow:hidden;">
-                        <div style="width: ${pct}%; height: 100%; background: ${colors[i]};"></div>
-                    </div>
-                </div>`;
-            }
-            document.getElementById('wd-zone-bars').innerHTML = zoneHtml;
-        } catch (e) { console.error("HR map fail", e); }
-    } else {
-        document.getElementById('wd-zone-bars').innerHTML = '<p class="text-muted" style="font-size:12px;">No HR stream data for this activity.</p>';
-    }
-
-    document.getElementById('workout-detail-modal').style.display = 'flex';
+        }
+    }, 100);
 }
 
 function closeWorkoutDetail() {
@@ -370,89 +344,90 @@ function closeWorkoutDetail() {
 }
 
 // ── Analytics Loading ──────────────────────────────────────────────────
-async function loadAnalytics() {
-    try {
-        const [pmcRes, zoneRes] = await Promise.all([
-            fetch('/api/analytics/pmc').then(r => r.json()),
-            fetch('/api/analytics/zones').then(r => r.json()),
-        ]);
-        renderPMCChart(pmcRes.series || []);
-        renderZoneTable(zoneRes.zones || {});
-        renderZoneChart(zoneRes.distribution || {});
-    } catch (e) {
-        console.error('Analytics load error:', e);
-    }
+function loadAnalytics() {
+    fetch('/api/analytics/pmc').then(r => r.json()).then(data => {
+        renderPMCChart(data.series || []);
+    }).catch(() => { });
+    fetch('/api/analytics/zones').then(r => r.json()).then(data => {
+        renderZoneTable(data.zones || {});
+        renderZoneChart(data.distribution || {});
+    }).catch(() => { });
 }
 
 function renderPMCChart(series) {
     const ctx = document.getElementById('pmc-chart');
     if (!ctx) return;
     if (pmcChart) pmcChart.destroy();
-
     const labels = series.map(d => d.date);
-    const ctlData = series.map(d => d.ctl);
-    const atlData = series.map(d => d.atl);
-    const tsbData = series.map(d => d.tsb);
-
     pmcChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels,
             datasets: [
                 {
-                    label: 'Fitness (CTL)', data: ctlData,
-                    borderColor: '#4FC3F7', borderWidth: 2,
-                    tension: 0.4, pointRadius: 0, fill: false,
+                    label: 'CTL – Fitness (42-day)',
+                    data: series.map(d => d.ctl),
+                    borderColor: '#00d4ff', borderWidth: 2, pointRadius: 0,
+                    fill: false, tension: 0.3
                 },
                 {
-                    label: 'Fatigue (ATL)', data: atlData,
-                    borderColor: '#FF8A65', borderWidth: 2,
-                    tension: 0.4, pointRadius: 0, fill: false,
+                    label: 'ATL – Fatigue (7-day)',
+                    data: series.map(d => d.atl),
+                    borderColor: '#ff6b35', borderWidth: 2, pointRadius: 0,
+                    fill: false, tension: 0.3
                 },
                 {
-                    label: 'Form (TSB)', data: tsbData,
-                    borderColor: '#81C784', borderWidth: 1.5,
-                    tension: 0.4, pointRadius: 0,
-                    fill: { target: 'origin', above: 'rgba(129,199,132,0.06)', below: 'rgba(229,57,53,0.06)' },
-                    segment: {
-                        borderColor: ctx2 => {
-                            const v = ctx2.p0.parsed.y;
-                            return v < -30 ? '#e53935' : v < -5 ? '#FDD835' : '#81C784';
-                        }
-                    }
+                    label: 'TSB – Form (Fitness − Fatigue)',
+                    data: series.map(d => d.tsb),
+                    borderColor: '#00e676', borderWidth: 2, pointRadius: 0,
+                    fill: true, backgroundColor: 'rgba(0,230,118,0.06)', tension: 0.3
                 },
             ]
         },
         options: {
-            responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: '#9e9e9e', font: { family: "'Space Grotesk',sans-serif", size: 11 } } },
-                tooltip: {
-                    backgroundColor: '#16161f', borderColor: '#333', borderWidth: 1,
-                    titleFont: { family: "'Space Grotesk',sans-serif" },
-                    bodyFont: { family: "'JetBrains Mono',monospace", size: 12 },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { color: '#fff', font: { family: 'Space Grotesk', size: 12 }, padding: 15, usePointStyle: true }
                 },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function (items) {
+                            const tsbItem = items.find(i => i.dataset.label.startsWith('TSB'));
+                            if (tsbItem) {
+                                const tsb = tsbItem.raw;
+                                if (tsb > 25) return 'Status: Detraining risk ⚠️';
+                                if (tsb >= 5) return 'Status: Optimal race form 🏁';
+                                if (tsb >= -10) return 'Status: Maintenance zone 👍';
+                                if (tsb >= -30) return 'Status: Productive training 💪';
+                                return 'Status: Overreaching — monitor ⛔';
+                            }
+                        }
+                    }
+                }
             },
             scales: {
-                x: { ticks: { color: '#546e7a', maxTicksLimit: 12, font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
-                y: { ticks: { color: '#546e7a', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)' } },
-            },
+                x: { ticks: { color: '#666', maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+            }
         }
     });
 }
 
 function renderZoneTable(zones) {
-    const container = document.getElementById('zone-table');
-    const colors = ['#4FC3F7', '#66BB6A', '#FDD835', '#FF8A65', '#e53935'];
+    const table = document.getElementById('zone-table');
+    if (!table) return;
+    const colors = ['#00e676', '#4fc3f7', '#ffd54f', '#ff7043', '#e53935'];
+    let html = '<tr><th>Zone</th><th>Min HR</th><th>Max HR</th></tr>';
     let i = 0;
-    container.innerHTML = Object.entries(zones).map(([name, range]) => {
-        const color = colors[i++ % colors.length];
-        return `<div class="zone-row">
-            <span class="zone-label">${name}</span>
-            <div class="zone-bar" style="background:${color}; width:${20 + i * 15}%"></div>
-            <span class="zone-range">${range.min} – ${range.max}</span>
-        </div>`;
-    }).join('');
+    for (const [z, { min, max }] of Object.entries(zones)) {
+        html += `<tr><td style="color:${colors[i]}">${z}</td><td>${min}</td><td>${max}</td></tr>`;
+        i++;
+    }
+    table.innerHTML = html;
 }
 
 function renderZoneChart(distribution) {
@@ -460,528 +435,574 @@ function renderZoneChart(distribution) {
     if (!ctx) return;
     if (zoneChart) zoneChart.destroy();
     const labels = Object.keys(distribution);
-    const data = Object.values(distribution);
-    const bgColors = ['#4FC3F7', '#66BB6A', '#FDD835', '#FF8A65', '#e53935'];
-
+    const values = Object.values(distribution);
+    const colors = ['#00e676', '#4fc3f7', '#ffd54f', '#ff7043', '#e53935'];
     zoneChart = new Chart(ctx, {
-        type: 'doughnut',
+        type: 'bar',
         data: {
             labels,
-            datasets: [{ data, backgroundColor: bgColors, borderWidth: 0 }]
+            datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }]
         },
         options: {
-            responsive: true, maintainAspectRatio: false, cutout: '65%',
-            plugins: {
-                legend: { position: 'right', labels: { color: '#9e9e9e', font: { family: "'Space Grotesk',sans-serif", size: 11 }, padding: 12 } },
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#fff' }, grid: { display: false } },
+                y: { ticks: { color: '#888', callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,0.05)' } }
             }
         }
     });
 }
 
-// ── Race Predictor ─────────────────────────────────────────────────────
-async function predictRaces() {
-    const dist = parseFloat(document.getElementById('rp-dist').value);
-    const timeSec = parseInt(document.getElementById('rp-time').value);
-    if (!dist || !timeSec) return;
+// ── V4: Race Predictor with HH:MM:SS ──────────────────────────────────
+function predictRaces() {
+    const h = parseInt(document.getElementById('pred-hours').value) || 0;
+    const m = parseInt(document.getElementById('pred-minutes').value) || 0;
+    const s = parseInt(document.getElementById('pred-seconds').value) || 0;
+    const totalSec = (h * 3600) + (m * 60) + s;
+    if (totalSec <= 0) { alert('Please enter a valid time'); return; }
 
-    try {
-        const res = await fetch('/api/predict/races', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ distance_km: dist, time_seconds: timeSec })
-        }).then(r => r.json());
+    const distKm = parseFloat(document.getElementById('pred-known-dist').value);
+    const timeString = `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 
-        document.getElementById('race-results').style.display = 'block';
-        document.getElementById('vdot-badge').textContent = `⚡ VDOT ${res.vdot.toFixed(1)}`;
-
-        const rows = Object.entries(res.predictions).map(([name, pred]) =>
-            `<tr><td>${name}</td><td>${pred.formatted}</td></tr>`
-        ).join('');
-        document.getElementById('race-table').innerHTML = `<table class="race-table">
-            <thead><tr><th>Distance</th><th>Predicted Time</th></tr></thead>
-            <tbody>${rows}</tbody>
-        </table>`;
-    } catch (e) {
-        console.error('Race prediction error:', e);
-    }
+    fetch('/api/predict/races', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ distance_km: distKm, time_string: timeString })
+    })
+        .then(r => r.json())
+        .then(data => {
+            const preds = data.predictions || [];
+            let html = `<div class="vdot-badge">VDOT: <strong>${data.vdot?.toFixed(1) || '?'}</strong></div>`;
+            html += `<table class="predictor-table"><thead><tr>
+                <th>Distance</th><th>Predicted Time</th><th>Pace/km</th><th>Pace/mi</th>
+            </tr></thead><tbody>`;
+            preds.forEach(p => {
+                html += `<tr>
+                    <td>${p.label}</td>
+                    <td class="font-mono">${p.predicted_time}</td>
+                    <td class="font-mono">${p.pace_per_km || '-'}</td>
+                    <td class="font-mono">${p.pace_per_mi || '-'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('predictor-result').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('predictor-result').innerHTML = '<p style="color:#ff6b6b;">Prediction failed.</p>';
+        });
 }
 
 // ── Training Plan ──────────────────────────────────────────────────────
-async function loadPlan() {
-    try {
-        const res = await fetch('/api/planner/current').then(r => r.json());
-        const header = document.getElementById('active-plan-header');
-        const calendar = document.getElementById('plan-calendar');
-        const exportBtn = document.getElementById('export-ics-btn');
-
-        if (res.plan && res.workouts && res.workouts.length > 0) {
-            header.innerHTML = `<strong style="color:var(--apex-primary);">${res.plan.goal}</strong> · Target: ${res.plan.target_date}`;
-            calendar.style.display = 'block';
-            exportBtn.style.display = 'inline-flex';
-            window._planWorkouts = res.workouts;
-
-            const localizedPlan = formatPlanForCalendar(res.plan, res.workouts);
-            renderPlanCalendar(localizedPlan);
+function loadPlan() {
+    fetch('/api/planner/current').then(r => r.json()).then(data => {
+        if (data.plan) {
+            document.getElementById('plan-header-info').innerHTML =
+                `<span>📅 ${data.plan.goal} · Target: ${data.plan.target_date}</span>`;
+            document.getElementById('btn-adjust-plan').style.display = 'inline-flex';
+            renderPlanCalendar(formatPlanForCalendar(data.plan, data.workouts));
         } else {
-            header.textContent = 'No active plan. Click "Generate AI Plan" to create one.';
-            calendar.style.display = 'none';
-            exportBtn.style.display = 'none';
+            document.getElementById('plan-header-info').innerHTML = '<span>No active plan — Generate one to get started!</span>';
+            document.getElementById('btn-adjust-plan').style.display = 'none';
+            document.getElementById('plan-calendar').innerHTML =
+                '<p style="color:var(--apex-muted);text-align:center;padding:2rem;">Click "Generate Plan" to build your training plan.</p>';
         }
-    } catch (e) {
-        console.error('Plan load error:', e);
-    }
+    }).catch(() => { });
 }
 
 function formatPlanForCalendar(dbPlan, dbWorkouts) {
-    if (!dbWorkouts.length) return { weeks: [] };
-    const sorted = [...dbWorkouts].sort((a, b) => new Date(a.date) - new Date(b.date));
-    const start = new Date(sorted[0].date);
-    const startMonday = new Date(start);
-    startMonday.setDate(start.getDate() - ((start.getDay() + 6) % 7));
-
-    const weeksMap = {};
+    const weeks = {};
+    const start = new Date(dbWorkouts[0]?.date || dbPlan.created_at);
     dbWorkouts.forEach(w => {
-        const d = new Date(w.date + 'T12:00:00');
-        const diffTime = d - startMonday;
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        const weekNum = Math.floor(diffDays / 7) + 1;
-
-        if (!weeksMap[weekNum]) {
-            weeksMap[weekNum] = { week_number: weekNum, focus: "Training Week " + weekNum, workouts: [] };
-        }
-
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dayStr = days[d.getDay()].substring(0, 3);
-        const descMatch = String(w.description || '').match(/Pace: (.*)\/km/);
-
-        weeksMap[weekNum].workouts.push({
-            id: w.id,
-            day: dayStr,
-            date: w.date,
+        const d = new Date(w.date);
+        const weekNum = Math.floor((d - start) / (7 * 86400000)) + 1;
+        if (!weeks[weekNum]) weeks[weekNum] = { week_number: weekNum, focus: '', workouts: [] };
+        weeks[weekNum].workouts.push({
+            ...w,
+            day: d.toLocaleDateString('en-US', { weekday: 'long' }),
             type: w.workout_type,
-            distance_km: w.distance_meters ? (w.distance_meters / 1000).toFixed(1) : 0,
-            duration_min: Math.round((w.duration_seconds || 0) / 60),
-            pace_min_per_km: descMatch ? descMatch[1] : '--',
-            description: String(w.description || '').split(' | Pace:')[0],
-            completed: w.completed,
-            execution_score: w.execution_score,
-            execution_data: w.execution_data,
-            execution_feedback: w.execution_feedback
+            distance_km: w.planned_distance_meters ? (w.planned_distance_meters / 1000).toFixed(1) : 0,
+            duration_min: w.planned_duration_seconds ? Math.round(w.planned_duration_seconds / 60) : 0,
         });
     });
-
-    const weeks = Object.values(weeksMap).sort((a, b) => a.week_number - b.week_number);
-    weeks.forEach(w => {
-        w.total_tss = Math.round(w.workouts.reduce((s, wk) => s + (wk.duration_min * 1), 0));
-    });
-    return { weeks };
+    return { plan_name: dbPlan.goal, goal: dbPlan.goal, weeks: Object.values(weeks) };
 }
 
 function renderPlanCalendar(plan) {
     const container = document.getElementById('plan-calendar');
-    container.innerHTML = plan.weeks.map(week => `
-        <div class="plan-week" id="week-${week.week_number}">
-            <div class="plan-week-header" onclick="toggleWeek(${week.week_number})">
-                <div class="week-title-area" style="display:flex; align-items:center;">
-                    <strong class="week-number" style="margin-right:15px; color:var(--apex-primary);">Week ${week.week_number}</strong>
-                    <div class="week-focus">${week.focus}</div>
-                </div>
-                <div class="week-stats-area" style="display:flex; gap:15px; align-items:center;">
-                    <div class="week-tss" style="color:var(--apex-warning); font-size: 13px;">${week.total_tss} TSS</div>
-                    <div class="week-volume" style="font-size: 13px;">${week.workouts.reduce((s, w) => s + parseFloat(w.distance_km || 0), 0).toFixed(0)} km</div>
-                    <span class="week-toggle" style="font-size: 10px;">▼</span>
-                </div>
-            </div>
-            
-            <div class="plan-week-body">
-                <div class="plan-day-row" style="display:flex; gap: 8px; margin-top: 10px;">
-                    ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-        const workout = week.workouts.find(w => w.day === day);
-        const isRest = !workout || (workout.type || '').toLowerCase().includes('rest') || workout.distance_km == 0;
-        const t = String(workout ? workout.type : '').toLowerCase();
-        let typeClass = 'type-rest';
-        if (!isRest) {
-            if (t.includes('easy')) typeClass = 'type-easy-run';
-            else if (t.includes('tempo') || t.includes('threshold')) typeClass = 'type-tempo-run';
-            else if (t.includes('interval')) typeClass = 'type-interval';
-            else if (t.includes('long')) typeClass = 'type-long-run';
-            else if (t.includes('race')) typeClass = 'type-race';
-            else typeClass = 'type-strength';
-        }
+    if (!container || !plan.weeks) return;
 
-        return `<div class="plan-day-cell ${workout ? 'has-workout' : 'rest-day'} ${typeClass}" style="flex:1;">
-                            <div class="plan-day-label" style="font-size: 11px; color: var(--apex-muted); font-weight: bold; margin-bottom: 5px;">${day}</div>
-                            ${(!isRest && workout) ? `
-                                <div class="plan-workout-type" style="font-size: 13px; font-weight: 500;">${workout.type}</div>
-                                <div class="plan-workout-dist" style="font-size: 12px; color: var(--apex-primary); margin: 3px 0;">${workout.distance_km} km</div>
-                                <div class="plan-workout-pace" style="font-size: 11px; color: var(--apex-muted);">${workout.pace_min_per_km} /km</div>
-                                ${workout.completed ?
-                    `<div class="exec-score-badge" style="margin-top:8px; display:inline-block; background: rgba(0,230,118,0.2); color: #00e676; padding: 3px 6px; border-radius:4px; font-size:11px;">Score: ${workout.execution_score}/10</div>` :
-                    `<button class="exec-btn" onclick="openExecution(${workout.id}, event)" style="margin-top:8px; padding: 4px 8px; font-size: 11px; background: rgba(0,212,255,0.1); border: 1px solid var(--apex-border); border-radius: 4px; color: var(--apex-text); cursor: pointer;">Log ✏️</button>`
-                }
-                            ` : `<div class="rest-label" style="font-size: 11px; color: var(--apex-muted); padding: 15px 0; text-align:center;">Rest / Recovery</div>`}
-                        </div>`;
-    }).join('')}
-                </div>
+    const today = new Date().toISOString().split('T')[0];
+    let html = '';
+    plan.weeks.forEach(week => {
+        html += `<div class="plan-week apex-card">
+            <div class="week-header" onclick="toggleWeek(${week.week_number})">
+                <strong>Week ${week.week_number}</strong>
+                <span>${week.focus || ''}</span>
+                <i data-lucide="chevron-down" class="week-chevron" id="chev-${week.week_number}"></i>
             </div>
-        </div>
-    `).join('');
+            <div class="week-body" id="week-${week.week_number}" style="display:none;">`;
+
+        (week.workouts || []).forEach(w => {
+            const wDate = w.date || '';
+            let stateClass = 'workout-upcoming';
+            let stateLabel = '📋 Upcoming';
+            if (w.completed) {
+                stateClass = 'workout-completed';
+                stateLabel = '✅ Completed';
+            } else if (wDate <= today) {
+                stateClass = 'workout-due';
+                stateLabel = '⚡ Due';
+            }
+
+            const typeClass = 'type-' + (w.type || '').toLowerCase().replace(/[^a-z]/g, '').replace('easyrun', 'easy').replace('longrun', 'long');
+
+            html += `<div class="plan-day ${typeClass} ${stateClass}">
+                <div class="d-header">
+                    <span class="d-title">${w.type || w.workout_type || 'Workout'}</span>
+                    <span class="d-state-badge">${stateLabel}</span>
+                </div>
+                <div class="d-meta">
+                    <span>${w.day || ''} · ${wDate}</span>
+                    ${w.distance_km ? `<span>📏 ${w.distance_km} km</span>` : ''}
+                    ${w.duration_min ? `<span>⏱ ${w.duration_min} min</span>` : ''}
+                </div>
+                <p class="d-desc">${w.description || ''}</p>`;
+
+            // V4: Show planned vs actual for completed workouts
+            if (w.completed && w.execution_score) {
+                let scoreBadge = '';
+                try {
+                    const fb = JSON.parse(w.execution_feedback || '{}');
+                    scoreBadge = `<div class="execution-card">
+                        <span class="score-badge">${w.execution_score.toFixed(1)}/10</span>
+                        <span class="score-headline">${fb.headline || ''}</span>
+                    </div>`;
+                } catch (e) { }
+
+                const actDist = w.actual_distance_meters ? (w.actual_distance_meters / 1000).toFixed(1) + ' km' : '-';
+                const actDur = w.actual_duration_seconds ? Math.round(w.actual_duration_seconds / 60) + ' min' : '-';
+
+                html += `<div class="planned-vs-actual">
+                    <div class="pva-planned"><small>Planned</small><br>${w.distance_km || 0} km · ${w.duration_min || 0} min</div>
+                    <div class="pva-actual"><small>Actual</small><br>${actDist} · ${actDur}${w.actual_avg_hr ? ` · ${w.actual_avg_hr} bpm` : ''}</div>
+                </div>
+                ${scoreBadge}`;
+                if (w.llm_comment) html += `<p class="llm-comment">💡 ${w.llm_comment}</p>`;
+                if (w.user_notes) html += `<p class="user-note">📝 ${w.user_notes}</p>`;
+            }
+
+            // Execution button for due workouts
+            if (!w.completed && wDate <= today) {
+                html += `<button class="apex-btn-sm" onclick="openExecution(${w.id}, event)">Log Execution</button>`;
+            }
+
+            html += `</div>`;
+        });
+        html += '</div></div>';
+    });
+    container.innerHTML = html;
+    lucide.createIcons();
 }
 
 function toggleWeek(num) {
-    const w = document.getElementById('week-' + num);
-    const body = w.querySelector('.plan-week-body');
-    if (body.style.display === 'none' || body.style.display === '') {
-        body.style.display = 'block';
-    } else {
-        body.style.display = 'none';
-    }
+    const body = document.getElementById(`week-${num}`);
+    if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
 }
 
+// ── V4: Pre-Plan Interview Modal ───────────────────────────────────────
+function openInterviewModal() {
+    document.getElementById('interview-modal').style.display = 'flex';
+    // Set default start date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('iv-start-date').value = today;
+    lucide.createIcons();
+}
+
+function closeInterviewModal() {
+    document.getElementById('interview-modal').style.display = 'none';
+}
+
+function parseTimeToSeconds(str) {
+    if (!str) return null;
+    const parts = str.split(':').map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
+}
+
+function submitInterview() {
+    const goal = document.getElementById('iv-goal').value;
+    const targetDate = document.getElementById('iv-target-date').value;
+    const startDate = document.getElementById('iv-start-date').value;
+    if (!goal || !targetDate || !startDate) { alert('Please fill required fields'); return; }
+
+    const reqBody = {
+        goal,
+        target_date: targetDate,
+        start_date: startDate,
+        weekly_hours: parseFloat(document.getElementById('iv-hours').value) || 8,
+        days_per_week: parseInt(document.getElementById('iv-days').value) || 5,
+        experience_level: document.getElementById('iv-experience').value,
+        current_weekly_km: parseFloat(document.getElementById('iv-weekly-km').value) || null,
+        pb_5k_seconds: parseTimeToSeconds(document.getElementById('iv-pb-5k').value),
+        pb_10k_seconds: parseTimeToSeconds(document.getElementById('iv-pb-10k').value),
+        pb_hm_seconds: parseTimeToSeconds(document.getElementById('iv-pb-hm').value),
+        pb_marathon_seconds: parseTimeToSeconds(document.getElementById('iv-pb-marathon').value),
+        pb_other_text: document.getElementById('iv-pb-other').value || null,
+        injury_notes: document.getElementById('iv-injury').value || null,
+    };
+
+    currentPlanMeta = reqBody;
+    closeInterviewModal();
+
+    // Show skeleton
+    document.getElementById('plan-preview-container').style.display = 'none';
+    document.getElementById('plan-calendar-container').style.display = 'block';
+    const skeleton = document.getElementById('plan-skeleton');
+    skeleton.style.display = 'block';
+
+    // Stream plan generation
+    let buffer = '';
+    fetch('/api/planner/generate-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody)
+    }).then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        function read() {
+            reader.read().then(({ done, value }) => {
+                if (done) {
+                    // Parse complete JSON
+                    try {
+                        currentPlanJSON = JSON.parse(buffer);
+                        skeleton.style.display = 'none';
+                        renderPlanPreview(currentPlanJSON);
+                    } catch (e) {
+                        skeleton.innerHTML = '<p style="color:#ff6b6b;">Failed to parse plan. Try again.</p>';
+                    }
+                    return;
+                }
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.token) buffer += data.token;
+                        } catch (e) { }
+                    }
+                }
+                read();
+            });
+        }
+        read();
+    }).catch(err => {
+        skeleton.innerHTML = '<p style="color:#ff6b6b;">Plan generation failed.</p>';
+    });
+}
+
+// V4: Render plan preview table
+function renderPlanPreview(planJSON) {
+    document.getElementById('plan-calendar-container').style.display = 'none';
+    document.getElementById('plan-preview-container').style.display = 'block';
+
+    const tbody = document.querySelector('#plan-preview-table tbody');
+    tbody.innerHTML = '';
+
+    const typeColors = {
+        'easy run': '#00e676', 'easy': '#00e676', 'recovery': '#00e676',
+        'interval': '#ff4444', 'intervals': '#ff4444', 'speed': '#ff4444',
+        'tempo': '#ff6b35', 'threshold': '#ff6b35',
+        'long run': '#42a5f5', 'long': '#42a5f5',
+        'rest': '#666', 'off': '#666',
+        'cross': '#ba68c8', 'cross-train': '#ba68c8', 'cross training': '#ba68c8',
+    };
+
+    (planJSON.weeks || []).forEach(week => {
+        (week.workouts || []).forEach(w => {
+            const typeLower = (w.type || '').toLowerCase();
+            const color = typeColors[typeLower] || '#00d4ff';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${week.week_number}</td>
+                <td>${w.day || ''}</td>
+                <td><span class="type-badge" style="background:${color}20;color:${color};border:1px solid ${color}40;">${w.type || 'Workout'}</span></td>
+                <td class="font-mono">${w.distance_km || '-'} km</td>
+                <td class="font-mono">${w.duration_min || '-'} min</td>
+                <td class="font-mono">${w.pace_min_per_km ? w.pace_min_per_km.toFixed(2) + '/km' : '-'}</td>
+                <td>${w.description || ''}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    });
+}
+
+function confirmPlan() {
+    if (!currentPlanJSON || !currentPlanMeta) return;
+
+    fetch('/api/planner/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            plan_json: currentPlanJSON,
+            goal: currentPlanMeta.goal,
+            target_date: currentPlanMeta.target_date,
+            weekly_hours: currentPlanMeta.weekly_hours,
+            start_date: currentPlanMeta.start_date,
+        })
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('plan-preview-container').style.display = 'none';
+                document.getElementById('plan-calendar-container').style.display = 'block';
+                currentPlanJSON = null;
+                currentPlanMeta = null;
+                loadPlan();
+            }
+        })
+        .catch(err => alert('Failed to save plan'));
+}
+
+function startOverPlan() {
+    currentPlanJSON = null;
+    currentPlanMeta = null;
+    document.getElementById('plan-preview-container').style.display = 'none';
+    document.getElementById('plan-calendar-container').style.display = 'block';
+}
+
+// ── V4: Plan Adjust Drawer ─────────────────────────────────────────────
+function openAdjustDrawer() {
+    document.getElementById('adjust-drawer').style.display = 'flex';
+    lucide.createIcons();
+}
+
+function closeAdjustDrawer() {
+    document.getElementById('adjust-drawer').style.display = 'none';
+}
+
+function sendAdjustMessage() {
+    const input = document.getElementById('adjust-input');
+    const instruction = input.value.trim();
+    if (!instruction) return;
+    input.value = '';
+
+    const chatContainer = document.getElementById('adjust-chat-container');
+    chatContainer.innerHTML += `<div class="message user"><div class="msg-content"><p>${instruction}</p></div></div>`;
+
+    // Need current plan JSON
+    fetch('/api/planner/current').then(r => r.json()).then(data => {
+        if (!data.plan) return;
+
+        // Stream adjust
+        const assistantDiv = document.createElement('div');
+        assistantDiv.className = 'message assistant';
+        assistantDiv.innerHTML = '<div class="msg-content"><p>Adjusting plan...</p></div>';
+        chatContainer.appendChild(assistantDiv);
+
+        let buffer = '';
+        fetch('/api/planner/adjust', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                plan_json: { weeks: data.workouts },
+                instruction: instruction,
+                plan_id: data.plan.id,
+            })
+        }).then(response => {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            function read() {
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        try {
+                            currentPlanJSON = JSON.parse(buffer);
+                            assistantDiv.querySelector('.msg-content p').textContent =
+                                `Plan adjusted! ${currentPlanJSON.weeks?.length || 0} weeks updated. Click "Confirm" to apply.`;
+                            currentPlanMeta = data.plan;
+                            renderPlanPreview(currentPlanJSON);
+                            document.getElementById('plan-preview-container').style.display = 'block';
+                            document.getElementById('plan-calendar-container').style.display = 'none';
+                        } catch (e) {
+                            assistantDiv.querySelector('.msg-content p').textContent = 'Failed to parse adjusted plan.';
+                        }
+                        return;
+                    }
+                    const chunk = decoder.decode(value);
+                    for (const line of chunk.split('\n')) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const d = JSON.parse(line.slice(6));
+                                if (d.token) buffer += d.token;
+                            } catch (e) { }
+                        }
+                    }
+                    read();
+                });
+            }
+            read();
+        });
+    });
+}
+
+// ── Execution Modal ────────────────────────────────────────────────────
 function ensureExecutionModal() {
-    if (!document.getElementById('execution-modal')) {
-        const d = document.createElement('div');
-        d.id = 'execution-modal';
-        d.className = 'modal-overlay';
-        d.style.display = 'none';
-        d.innerHTML = `
-            <div class="modal-content" style="max-width: 600px;">
-                <button class="close-modal" onclick="closeExecution()">&times;</button>
-                <div id="exec-content"></div>
-            </div>
-        `;
-        document.body.appendChild(d);
-    }
+    if (document.getElementById('execution-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'execution-modal';
+    modal.className = 'modal-overlay';
+    modal.style.display = 'none';
+    modal.innerHTML = `<div class="modal-content"><div class="modal-header"><h3>Log Execution</h3>
+        <button class="modal-close" onclick="closeExecution()">&times;</button></div>
+        <div class="modal-body" id="exec-body"></div></div>`;
+    document.body.appendChild(modal);
 }
 
 function openExecution(workoutId, event) {
     if (event) event.stopPropagation();
     ensureExecutionModal();
-    const workout = window._planWorkouts.find(w => w.id === workoutId);
-    if (!workout) return;
 
-    const isInterval = workout.description.toLowerCase().includes('x') || workout.description.toLowerCase().includes('interval');
-
-    let html = '';
-    if (isInterval) {
-        const repMatch = workout.description.match(/(\d+)x/i);
-        const reps = repMatch ? parseInt(repMatch[1]) : 3;
-
-        let splitTable = '';
-        for (let i = 1; i <= Math.min(reps, 15); i++) {
-            splitTable += `
-            <div class="split-row" style="display:flex; gap: 5px; margin-bottom: 5px;">
-              <span style="font-size: 13px; min-width: 50px; line-height:30px;">Rep ${i}</span>
-              <input type="text" placeholder="-- km" class="dist-input" id="dist_${i}" style="flex:1;">
-              <input type="text" placeholder="--:--" class="pace-input" id="pace_${i}" style="flex:1;">
-              <input type="number" placeholder="HR" class="hr-input" id="hr_${i}" style="flex:1;">
-            </div>`;
-        }
-
-        html = `
-        <div class="execution-form" id="exec-${workoutId}">
-          <h4>Log Execution: ${workout.workout_type}</h4>
-          <p class="exec-desc" style="font-size:12px; color:var(--apex-muted); margin-bottom:15px;">${workout.description}</p>
-          <div class="splits-table">
-            ${splitTable}
-          </div>
-          <div class="recovery-row" style="margin-top: 15px;">
-            <label style="font-size: 12px; color: var(--apex-text);">Recovery felt:</label>
-            <select id="recoveryQuality_${workoutId}" style="width: 100%; margin-top: 5px;">
-              <option>Complete — fully ready for next rep</option>
-              <option>Partial — legs still heavy</option>
-              <option>Incomplete — had to start early</option>
-            </select>
-          </div>
-          <textarea placeholder="Any notes? (weather, fatigue, terrain...)" id="execNotes_${workoutId}" rows="2" style="width:100%; margin-top:15px;"></textarea>
-          <button onclick="scoreExecution(${workoutId}, true, ${Math.min(reps, 15)})" class="btn-primary" style="margin-top: 15px; width: 100%;">⚡ Get AI Score</button>
-        </div>`;
-    } else {
-        html = `
-        <div class="execution-form" id="exec-${workoutId}">
-          <h4>Log Execution: ${workout.workout_type}</h4>
-          <p class="exec-desc" style="font-size:12px; color:var(--apex-muted); margin-bottom:15px;">${workout.description}</p>
-          <div class="simple-log-row" style="display:flex; gap: 10px; margin: 15px 0;">
-            <div><label style="font-size: 11px;">Distance</label>
-                 <input type="number" id="actualDist_${workoutId}" placeholder="${(workout.distance_meters / 1000).toFixed(1)}"></div>
-            <div><label style="font-size: 11px;">Pace /km</label>
-                 <input type="text" id="actualPace_${workoutId}" placeholder="5:45"></div>
-            <div><label style="font-size: 11px;">Avg HR</label>
-                 <input type="number" id="actualHR_${workoutId}" placeholder="---"></div>
-          </div>
-          <textarea placeholder="How did it feel?" id="execNotes_${workoutId}" rows="2" style="width: 100%;"></textarea>
-          <button onclick="scoreExecution(${workoutId}, false, 0)" class="btn-primary" style="margin-top: 15px; width: 100%;">⚡ Get AI Score</button>
-        </div>`;
-    }
-
-    document.getElementById('exec-content').innerHTML = html;
+    const w = null; // Would need to fetch planned workout
     document.getElementById('execution-modal').style.display = 'flex';
+    document.getElementById('exec-body').innerHTML = `
+        <div class="form-group">
+            <label>Completion Status</label>
+            <select id="exec-status">
+                <option value="completed">Completed</option>
+                <option value="partial">Partial</option>
+                <option value="skipped">Skipped</option>
+            </select>
+        </div>
+        <div id="exec-skip-reason" style="display:none;" class="form-group">
+            <label>Reason</label>
+            <select id="exec-reason">
+                <option value="injury">Injury</option>
+                <option value="time">Time</option>
+                <option value="fatigue">Fatigue</option>
+                <option value="weather">Weather</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div class="interview-grid">
+            <div class="form-group">
+                <label>Actual Distance (km)</label>
+                <input type="number" id="exec-distance" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Actual Duration (min)</label>
+                <input type="number" id="exec-duration">
+            </div>
+            <div class="form-group">
+                <label>Average HR</label>
+                <input type="number" id="exec-hr">
+            </div>
+            <div class="form-group">
+                <label>RPE (1-10)</label>
+                <input type="number" id="exec-rpe" min="1" max="10">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Notes (How did it feel?)</label>
+            <textarea id="exec-notes" rows="2" placeholder="How was the workout?"></textarea>
+        </div>
+        <button class="apex-btn" onclick="scoreExecution(${workoutId})">Score Execution</button>
+        <div id="exec-result"></div>
+    `;
+
+    document.getElementById('exec-status').addEventListener('change', function () {
+        document.getElementById('exec-skip-reason').style.display =
+            this.value !== 'completed' ? 'block' : 'none';
+    });
 }
 
 function closeExecution() {
-    document.getElementById('execution-modal').style.display = 'none';
+    const modal = document.getElementById('execution-modal');
+    if (modal) modal.style.display = 'none';
 }
 
-function parsePaceToSec(paceStr) {
-    if (!paceStr) return 0;
-    const parts = paceStr.replace('/km', '').replace(' ', '').split(':');
-    if (parts.length === 2) {
-        return parseInt(parts[0]) * 60 + parseInt(parts[1]);
-    }
-    return 0;
-}
+function scoreExecution(workoutId) {
+    const status = document.getElementById('exec-status').value;
+    const distKm = parseFloat(document.getElementById('exec-distance').value) || 0;
+    const durMin = parseFloat(document.getElementById('exec-duration').value) || 0;
+    const avgPace = distKm > 0 ? (durMin * 60) / distKm : 300;
 
-async function scoreExecution(workoutId, isInterval, numReps) {
-    const btn = document.querySelector(`#exec-${workoutId} button`);
-    if (btn) { btn.innerText = "Analyzing Score..."; btn.disabled = true; }
+    const body = {
+        planned_workout_id: workoutId,
+        execution_data: {
+            completion_status: status,
+            actual_distance_meters: distKm * 1000,
+            actual_duration_seconds: durMin * 60,
+            actual_avg_hr: parseInt(document.getElementById('exec-hr').value) || null,
+            rpe: parseInt(document.getElementById('exec-rpe').value) || null,
+            avg_pace_sec_per_km: avgPace,
+            notes: document.getElementById('exec-notes').value,
+            skipped_reason: status !== 'completed' ? document.getElementById('exec-reason').value : null,
+            splits: [{ rep: 1, pace_sec_per_km: Math.round(avgPace), hr: parseInt(document.getElementById('exec-hr').value) || 0 }],
+        }
+    };
 
-    let execData = { splits: [], notes: document.getElementById('execNotes_' + workoutId).value };
+    document.getElementById('exec-result').innerHTML = '<p>Scoring...</p>';
 
-    if (isInterval) {
-        execData.recovery_quality = document.getElementById('recoveryQuality_' + workoutId).value;
-        for (let i = 1; i <= numReps; i++) {
-            const pace = document.getElementById('pace_' + i).value;
-            if (pace) {
-                execData.splits.push({
-                    rep: i,
-                    pace_sec_per_km: parsePaceToSec(pace),
-                    hr: parseInt(document.getElementById('hr_' + i).value || '0')
-                });
+    fetch('/api/planner/score-execution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+        .then(r => r.json())
+        .then(result => {
+            let html = `<div class="execution-card" style="margin-top:15px;">
+                <div class="score-badge">${result.score}/10 (${result.grade})</div>
+                <p><strong>${result.headline}</strong></p>
+                <p>${result.summary || result.pacing_analysis || ''}</p>`;
+            if (result.strengths?.length) html += `<p>✅ ${result.strengths.join(', ')}</p>`;
+            if (result.improvements?.length) html += `<p>💡 ${result.improvements.join(', ')}</p>`;
+            if (result.coaching_advice) html += `<p>🎯 ${result.coaching_advice}</p>`;
+            if (result.adjust_next_workout) {
+                html += `<div class="adjust-suggestion">
+                    <p>📊 Based on this effort, consider adjusting your next workout.</p>
+                    <button class="apex-btn-sm" onclick="closeExecution();openAdjustDrawer();">Yes, adjust</button>
+                </div>`;
             }
-        }
-        if (execData.splits.length > 0) {
-            execData.avg_pace_sec_per_km = Math.round(execData.splits.reduce((s, x) => s + x.pace_sec_per_km, 0) / execData.splits.length);
-        }
-    } else {
-        const p = document.getElementById('actualPace_' + workoutId).value;
-        execData.avg_pace_sec_per_km = parsePaceToSec(p);
-        execData.avg_hr = parseInt(document.getElementById('actualHR_' + workoutId).value || '0');
-        execData.actual_distance_km = parseFloat(document.getElementById('actualDist_' + workoutId).value || '0');
-    }
-
-    try {
-        const res = await fetch('/api/planner/score-execution', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                planned_workout_id: workoutId,
-                execution_data: execData
-            })
+            html += '</div>';
+            document.getElementById('exec-result').innerHTML = html;
+        })
+        .catch(() => {
+            document.getElementById('exec-result').innerHTML = '<p style="color:#ff6b6b;">Scoring failed.</p>';
         });
-        const scoreJson = await res.json();
-        renderScoreCard(scoreJson, execData.splits);
-        loadPlan();
-    } catch (e) {
-        console.error("Scoring failed: ", e);
-        if (btn) { btn.innerText = "⚡ Get AI Score"; btn.disabled = false; }
-    }
-}
-
-function renderScoreCard(scoreData, splits) {
-    let gradeCss = scoreData.grade.replace('+', 'plus').replace('-', 'minus').toLowerCase();
-    let html = `
-    <div class="score-card score-${gradeCss}" style="background: var(--apex-card-alt); padding: 20px; border-radius: 12px; margin-top: 10px;">
-      <div class="score-header" style="display:flex; align-items:center; gap: 15px; margin-bottom: 20px;">
-        <div class="score-circle" style="width: 60px; height: 60px; border-radius: 50%; background: var(--apex-primary); color: #000; display:flex; align-items:center; justify-content:center; font-size: 20px; font-weight:bold;">
-            ${scoreData.score}/10
-        </div>
-        <div>
-          <div class="score-grade" style="font-size: 22px; font-weight:bold;">${scoreData.grade}</div>
-          <div class="score-headline" style="font-size: 13px; color: var(--apex-text);">${scoreData.headline}</div>
-        </div>
-      </div>
-      
-      <div class="score-body">
-        <div class="analysis-section" style="margin-top:15px;">
-          <h5 style="margin-bottom:8px; color:var(--apex-muted);">Pacing Analysis</h5>
-          <p style="font-size:13px; line-height:1.4;">${scoreData.pacing_analysis || ''}</p>
-          <canvas id="splitsChart" height="80" style="margin-top:10px;"></canvas>
-        </div>
-        
-        <div class="strengths-improvements" style="display:flex; gap:15px; margin-top:20px;">
-          <div class="strengths" style="flex:1;">
-            <h5 style="color:var(--apex-success); margin-bottom:8px;">✅ Strengths</h5>
-            <ul style="font-size:12px; padding-left:15px;">${(scoreData.strengths || []).map(s => `<li style="margin-bottom:4px;">${s}</li>`).join('')}</ul>
-          </div>
-          <div class="improvements" style="flex:1;">
-            <h5 style="color:var(--apex-danger); margin-bottom:8px;">📈 To Improve</h5>
-            <ul style="font-size:12px; padding-left:15px;">${(scoreData.improvements || []).map(s => `<li style="margin-bottom:4px;">${s}</li>`).join('')}</ul>
-          </div>
-        </div>
-        
-        <div class="next-advice" style="margin-top:20px; padding: 15px; background: rgba(0,212,255,0.05); border-left: 3px solid var(--apex-primary); border-radius: 4px;">
-          <h5 style="margin-bottom:5px; color:var(--apex-primary);">🎯 Coach Says Next Time</h5>
-          <p style="font-size:13px;">${scoreData.next_session_advice || ''}</p>
-        </div>
-      </div>
-    </div>`;
-
-    document.getElementById('exec-content').innerHTML = html;
-
-    if (splits && splits.length > 0) {
-        const targetPace = splits.length > 0 ? splits[0].pace_sec_per_km * 0.95 : 240;
-        new Chart(document.getElementById('splitsChart'), {
-            type: 'bar',
-            data: {
-                labels: splits.map((_, i) => `Rep ${i + 1}`),
-                datasets: [
-                    {
-                        label: 'Target', type: 'line',
-                        data: splits.map(() => targetPace),
-                        borderColor: 'rgba(245,200,66,0.7)',
-                        borderDash: [5, 5], pointRadius: 0,
-                    },
-                    {
-                        label: 'Actual',
-                        data: splits.map(s => s.pace_sec_per_km),
-                        backgroundColor: splits.map(s =>
-                            s.pace_sec_per_km > targetPace * 1.05 ? '#ff5252' :
-                                s.pace_sec_per_km < targetPace * 0.95 ? '#69f0ae' : '#00d4ff'
-                        ),
-                    }
-                ]
-            },
-            options: { plugins: { legend: { display: false } }, scales: { y: { reverse: true } } }
-        });
-    }
 }
 
 // ── ICS Export ─────────────────────────────────────────────────────────
 function exportICS() {
-    const workouts = window._planWorkouts;
-    if (!workouts || !workouts.length) return;
-
-    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//APEX Coach//EN'];
-    workouts.forEach(w => {
-        lines.push('BEGIN:VEVENT');
-        lines.push(`DTSTART: ${(w.date || '').replace(/-/g, '')}T060000Z`);
-        lines.push(`DTEND: ${(w.date || '').replace(/-/g, '')} T070000Z`);
-        lines.push(`SUMMARY:${w.workout_type || 'Workout'} — ${((w.planned_distance_meters || 0) / 1000).toFixed(1)} km`);
-        lines.push(`DESCRIPTION:${(w.description || '').replace(/\n/g, '\\n')} `);
-        lines.push('END:VEVENT');
-    });
-    lines.push('END:VCALENDAR');
-
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'apex_training_plan.ics'; a.click();
-    URL.revokeObjectURL(url);
-}
-
-// ── Plan Modal ─────────────────────────────────────────────────────────
-function openPlanModal() { document.getElementById('plan-modal').style.display = 'flex'; }
-function closePlanModal() { document.getElementById('plan-modal').style.display = 'none'; }
-
-function showPlanSkeleton() {
-    const container = document.getElementById('plan-calendar');
-    container.innerHTML = `
-        < div class="plan-generating-banner" >
-            <div class="pulse-dot"></div>
-            <span>APEX is building your periodized plan...</span>
-        </div >
-        ${Array(4).fill(0).map((_, i) => `
-            <div class="week-skeleton">
-                <div class="skeleton-header"></div>
-                ${Array(5).fill(0).map(() => `
-                    <div class="skeleton-row"></div>
-                `).join('')}
-            </div>
-        `).join('')
-        }
-    `;
-    container.style.display = 'block';
-}
-
-document.getElementById('plan-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('generate-plan-btn');
-    btn.textContent = 'Generating...'; btn.disabled = true;
-
-    const goal = document.getElementById('p-goal').value;
-    const target = document.getElementById('p-date').value;
-    const hours = parseFloat(document.getElementById('p-hours').value);
-    const today = new Date().toISOString().split('T')[0];
-
-    closePlanModal();
-    showPlanSkeleton();
-
-    let fullJson = '';
-    try {
-        const response = await fetch('/api/planner/generate-stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ goal, target_date: target, weekly_hours: hours, start_date: today, user_id: 1 })
+    fetch('/api/planner/current').then(r => r.json()).then(data => {
+        if (!data.workouts?.length) return alert('No plan to export');
+        let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//APEX//Endurance Coach//EN\n';
+        data.workouts.forEach(w => {
+            const d = w.date.replace(/-/g, '');
+            ics += `BEGIN:VEVENT\nDTSTART;VALUE=DATE:${d}\nSUMMARY:${w.workout_type}\nDESCRIPTION:${(w.description || '').replace(/\n/g, '\\n')}\nEND:VEVENT\n`;
         });
+        ics += 'END:VCALENDAR';
+        const blob = new Blob([ics], { type: 'text/calendar' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'apex_plan.ics';
+        a.click();
+    });
+}
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const lines = decoder.decode(value).split('\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const strData = line.slice(6).trim();
-                    if (!strData || strData === '[DONE]') continue;
-                    try {
-                        const data = JSON.parse(strData);
-                        if (data.token) {
-                            fullJson += data.token;
-                        }
-                        if (data.status === 'complete') {
-                            loadPlan();
-                        }
-                    } catch (e) { }
-                }
-            }
-        }
-    } catch (err) {
-        console.error('Plan generation stream error:', err);
-    } finally {
-        btn.textContent = 'Generate Plan'; btn.disabled = false;
-        loadPlan(); // Ensure final UI refresh regardless of crash
-    }
-});
-
-// ── Workout Form ───────────────────────────────────────────────────────
-document.getElementById('w-date').valueAsDate = new Date();
-
-document.getElementById('workout-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('submit-workout-btn');
-    btn.textContent = 'Saving...'; btn.disabled = true;
-    const payload = {
-        date: document.getElementById('w-date').value,
-        sport: 'run',
-        distance_meters: parseFloat(document.getElementById('w-dist').value) * 1000,
-        duration_seconds: parseInt(document.getElementById('w-dur').value) * 60,
-        avg_hr: parseInt(document.getElementById('w-hr').value),
-        rpe: parseInt(document.getElementById('w-rpe').value),
-    };
-    try {
-        const res = await fetch('/api/workouts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }).then(r => r.json());
-        if (res.status === 'success') loadDashboard();
-    } catch (err) {
-        console.error('Workout save error:', err);
-    } finally {
-        btn.textContent = 'Save Workout'; btn.disabled = false;
-    }
-});
-
-// ── Chat Logic ─────────────────────────────────────────────────────────
+// ── Chat Functions ─────────────────────────────────────────────────────
 const chatContainer = document.getElementById('chat-container');
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
 const welcomeScreen = document.getElementById('welcome-screen');
+const userInput = document.getElementById('user-input');
 const newChatBtn = document.getElementById('new-chat-btn');
 
-function setPrompt(text) { userInput.value = text; userInput.focus(); }
+function setPrompt(text) {
+    userInput.value = text;
+    userInput.focus();
+}
 
 // Auto-resize textarea
 userInput.addEventListener('input', () => {
@@ -990,110 +1011,115 @@ userInput.addEventListener('input', () => {
 });
 
 userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
 });
 
-sendBtn.addEventListener('click', sendMessage);
-
 newChatBtn.addEventListener('click', () => {
-    chatHistory = [];
+    chatHistories[currentChatMode] = [];
     chatContainer.innerHTML = '';
     chatContainer.appendChild(welcomeScreen);
     welcomeScreen.style.display = 'flex';
+    switchChatMode(currentChatMode);
     switchTab('chat');
 });
 
+function createMessageDiv(role, content) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `message ${role}`;
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'msg-content';
+    if (role === 'assistant') {
+        contentDiv.innerHTML = marked.parse(content);
+    } else {
+        contentDiv.innerHTML = `<p>${content}</p>`;
+    }
+    msgDiv.appendChild(contentDiv);
+    return msgDiv;
+}
+
 function addMessage(role, content) {
-    if (welcomeScreen) welcomeScreen.style.display = 'none';
-    const div = document.createElement('div');
-    div.className = `message ${role} `;
-    const iconName = role === 'user' ? 'user' : 'zap';
-    div.innerHTML = `
-        < div class="avatar" > <i data-lucide="${iconName}"></i></div >
-            <div class="msg-content">${role === 'assistant' ? marked.parse(content) : `<p>${content}</p>`}</div>
-    `;
-    chatContainer.appendChild(div);
-    lucide.createIcons({ attrs: { class: 'icon', width: 16, height: 16 } });
+    if (welcomeScreen.style.display !== 'none') {
+        welcomeScreen.style.display = 'none';
+    }
+    const msgDiv = createMessageDiv(role, content);
+    chatContainer.appendChild(msgDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
-    return div;
+    return msgDiv;
 }
 
 async function sendMessage() {
     const text = userInput.value.trim();
     if (!text) return;
-
     userInput.value = '';
     userInput.style.height = 'auto';
-    addMessage('user', text);
-    chatHistory.push({ role: 'user', content: text });
 
-    sendBtn.disabled = true;
-    const assistantDiv = addMessage('assistant', '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot" style="animation-delay:0.2s"></span><span class="typing-dot" style="animation-delay:0.4s"></span></div>');
-    const contentEl = assistantDiv.querySelector('.msg-content');
+    chatHistories[currentChatMode].push({ role: 'user', content: text });
+    addMessage('user', text);
+
+    const assistantDiv = addMessage('assistant', '');
+    const contentDiv = assistantDiv.querySelector('.msg-content');
+    contentDiv.innerHTML = '<span class="typing-indicator">●●●</span>';
 
     try {
-        const resp = await fetch('/api/chat', {
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: chatHistory })
+            body: JSON.stringify({
+                messages: chatHistories[currentChatMode].map(m => ({ role: m.role, content: m.content })),
+                mode: currentChatMode
+            })
         });
-        const reader = resp.body.getReader();
+
+        const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
-        let buffer = '';
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
 
             for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const payload = line.slice(6);
-                if (payload === '[DONE]') break;
-                try {
-                    const data = JSON.parse(payload);
-                    if (data.type === 'metadata') {
-                        renderSources(data.sources || []);
-                    } else if (data.type === 'content') {
-                        fullText += data.text;
-                        contentEl.innerHTML = marked.parse(fullText);
-                    }
-                } catch { }
+                if (line.startsWith('data: ')) {
+                    const raw = line.slice(6).trim();
+                    if (raw === '[DONE]') break;
+                    try {
+                        const data = JSON.parse(raw);
+                        if (data.type === 'metadata') {
+                            renderSources(data.sources || []);
+                        } else if (data.type === 'content') {
+                            fullText += data.text;
+                            contentDiv.innerHTML = marked.parse(fullText);
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        }
+                    } catch (e) { }
+                }
             }
-            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
-        chatHistory.push({ role: 'assistant', content: fullText });
+
+        chatHistories[currentChatMode].push({ role: 'assistant', content: fullText });
+
     } catch (err) {
-        contentEl.innerHTML = `< p style = "color:var(--apex-danger);" > Error: ${err.message}</p > `;
-    } finally {
-        sendBtn.disabled = false;
-        lucide.createIcons();
+        contentDiv.innerHTML = '<p style="color:#ff6b6b;">Error connecting to server.</p>';
     }
 }
 
 function renderSources(sources) {
-    const section = document.getElementById('sources-section');
     const list = document.getElementById('sources-list');
     const count = document.getElementById('sources-count');
-    if (!sources.length) return;
-    section.style.display = '';
+    if (!list) return;
     count.textContent = sources.length;
-    list.innerHTML = sources.map(s => `< div class="source-item" >
-        <div class="source-header"><span>${s.type}</span><span>${s.score}</span></div>
-        <div class="source-preview">${s.preview}</div>
-    </div > `).join('');
+    list.innerHTML = sources.map(s =>
+        `<div class="source-item"><span class="source-type">${s.type}</span>
+         <span class="source-sport">${s.sport}</span>
+         <span class="source-score">${(s.score * 100).toFixed(0)}%</span>
+         <p class="source-preview">${s.preview}</p></div>`
+    ).join('');
 }
 
 // ── Init ───────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    lucide.createIcons();
-    // Check for Strava redirect
-    if (window.location.search.includes('connected=strava')) {
-        window.history.replaceState({}, '', '/');
-        const si = document.getElementById('stravaStatus');
-        if (si) si.innerHTML = '<span style="color:var(--apex-success);">✅ Connected — syncing...</span>';
-    }
-});
+switchChatMode('ask');

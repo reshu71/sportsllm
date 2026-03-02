@@ -44,7 +44,16 @@ async def generate_plan_streaming(
     target_date: str, 
     weekly_hours: float, 
     start_date: str,
-    rag_context: str
+    rag_context: str,
+    # V4: Pre-plan interview fields
+    days_per_week: int = 5,
+    pb_5k: int = None,
+    pb_10k: int = None,
+    pb_hm: int = None,
+    pb_marathon: int = None,
+    experience: str = "intermediate",
+    injury: str = None,
+    weekly_km: float = None,
 ):
     from openai import AsyncOpenAI
     from datetime import datetime, timedelta
@@ -52,16 +61,35 @@ async def generate_plan_streaming(
     
     prof = models.get_user_profile(user_id)
     
+    # V4: Build enhanced athlete context with interview data
     state_str = (
         f"ATHLETE PROFILE:\n"
         f"- Target Goal: {goal}\n"
         f"- Target Race Date: {target_date}\n"
         f"- Plan Start Date: {start_date}\n"
+        f"- Available Training Days/Week: {days_per_week}\n"
         f"- Available Training Hours/Week: {weekly_hours}\n"
         f"- Current VDOT: {prof.get('current_vdot', 'Unknown')}\n"
         f"- Resting HR: {prof.get('resting_hr', 'Unknown')}\n"
+        f"- Max HR: {prof.get('max_hr', 'Unknown')}\n"
+        f"- Experience Level: {experience or 'Unknown'}\n"
         f"- Life Stress: {prof.get('life_stress_level', 'Unknown')}\n"
     )
+    
+    # Add PBs if provided
+    from src.services.sports_science import format_time
+    if pb_5k:
+        state_str += f"- 5K PB: {format_time(pb_5k)}\n"
+    if pb_10k:
+        state_str += f"- 10K PB: {format_time(pb_10k)}\n"
+    if pb_hm:
+        state_str += f"- Half Marathon PB: {format_time(pb_hm)}\n"
+    if pb_marathon:
+        state_str += f"- Marathon PB: {format_time(pb_marathon)}\n"
+    if weekly_km:
+        state_str += f"- Current Weekly Mileage: {weekly_km} km\n"
+    if injury:
+        state_str += f"- Injury / Limitations: {injury}\n"
     
     full_system_prompt = f"{PLANNER_PROMPT}\n\n{state_str}\n\nRAG METHODOLOGY CONTEXT:\n{rag_context}"
     
@@ -72,50 +100,19 @@ async def generate_plan_streaming(
             stream=True,
             messages=[
                 {"role": "system", "content": full_system_prompt},
-                {"role": "user", "content": f"Generate a training schedule from {start_date} to {target_date}."}
+                {"role": "user", "content": f"Generate a training schedule from {start_date} to {target_date}. Plan for {days_per_week} days per week."}
             ],
             temperature=0.3,
             max_tokens=4000
         )
         
-        buffer = ""
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 delta = chunk.choices[0].delta.content
-                buffer += delta
                 yield delta
                 
-        # Once complete, parse and save to DB
-        try:
-            plan = json.loads(buffer)
-            plan_id = models.create_training_plan(
-                user_id=user_id, goal=goal, target_date=target_date, weekly_hours=weekly_hours
-            )
-            # Save workouts 
-            sd = datetime.strptime(start_date, '%Y-%m-%d')
-            days_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, "Friday": 4, "Saturday": 5, "Sunday": 6}
-            start_weekday = sd.weekday()
-            
-            for week in plan.get("weeks", []):
-                wn = week.get("week_number", 1) - 1
-                for w in week.get("workouts", []):
-                    day_name = w.get("day", "Monday")
-                    day_offset = days_map.get(day_name, 0)
-                    target_day = sd + timedelta(days=(wn * 7) + day_offset - start_weekday)
-                    if target_day < sd:
-                        target_day = target_day + timedelta(days=7) 
-                        
-                    models.add_planned_workout(
-                        plan_id=plan_id,
-                        date=target_day.strftime('%Y-%m-%d'),
-                        sport="Run",
-                        workout_type=w.get("type", "Workout"),
-                        dist=w.get("distance_km", 0) * 1000,
-                        dur=w.get("duration_min", 0) * 60,
-                        desc=w.get("description", "") + f" | Pace: {w.get('pace_min_per_km','N/A')}/km"
-                    )
-        except Exception as e:
-            logger.error(f"Failed to json parse / save streaming plan: {e}")
+        # V4: Do NOT auto-save to DB. The frontend will call /api/planner/confirm
+        # after the user reviews and approves the plan.
 
     except Exception as e:
         logger.error(f"Failed to stream plan: {e}")
