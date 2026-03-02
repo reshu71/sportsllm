@@ -1,0 +1,1126 @@
+:root {
+    /* APEX V2 Color System */
+    --apex-black: #0a0a0f;
+    --apex-dark: #111118;
+    --apex-card: #16161f;
+    --apex-border: rgba(255, 255, 255, 0.06);
+    --apex-primary: #00d4ff;
+    --apex-secondary: #ff6b35;
+    --apex-success: #00e676;
+    --apex-warning: #ffd600;
+    --apex-danger: #ff1744;
+    --apex-text: #e8eaf6;
+    --apex-muted: #546e7a;
+    --gradient-hero: linear-gradient(135deg, #00d4ff15 0%, #ff6b3510 100%);
+    --brand-gradient: linear-gradient(135deg, #00d4ff 0%, #0073ff 100%);
+    --glow-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+    --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+    /* Typography */
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-body: 'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--apex-black);
+    color: var(--apex-text);
+    line-height: 1.6;
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+}
+
+/* ── Layout ────────────────────────────────────── */
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ── Sidebar ───────────────────────────────────── */
+.sidebar {
+    width: 260px;
+    background-color: var(--apex-dark);
+    border-right: 1px solid var(--apex-border);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+    z-index: 10;
+    overflow-y: auto;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.brand-icon {
+    color: var(--apex-primary);
+    width: 28px;
+    height: 28px;
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.4));
+}
+
+.brand h1 {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-menu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.nav-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--apex-muted);
+    font-size: 0.95rem;
+    font-family: var(--font-heading);
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    width: 100%;
+    text-align: left;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--apex-text);
+}
+
+.tab-btn.active {
+    background: rgba(0, 212, 255, 0.08);
+    color: var(--apex-primary);
+    font-weight: 500;
+}
+
+.nav-section h3 {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--apex-muted);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.nav-section ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.nav-section li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--apex-muted);
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    transition: var(--transition-smooth);
+    cursor: default;
+}
+
+.nav-section li i {
+    width: 15px;
+    height: 15px;
+    opacity: 0.7;
+}
+
+.nav-section li:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--apex-text);
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--apex-border);
+    font-size: 0.75rem;
+    color: var(--apex-muted);
+    text-align: center;
+}
+
+/* ── Strava Button ─────────────────────────────── */
+.btn-strava {
+    background: #FC4C02;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 0.85rem;
+    transition: opacity 0.2s;
+}
+
+.btn-strava:hover {
+    opacity: 0.85;
+}
+
+.sync-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--apex-success);
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse 2s infinite;
+}
+
+/* ── Badge ─────────────────────────────────────── */
+.badge {
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--apex-primary);
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    margin-left: 0.5rem;
+}
+
+/* ── Sources ───────────────────────────────────── */
+.sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.source-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--apex-border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.source-item .source-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+    color: var(--apex-primary);
+    font-weight: 500;
+}
+
+.source-item .source-preview {
+    color: var(--apex-muted);
+    font-size: 0.75rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ── Main Content ──────────────────────────────── */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at 50% 0%, rgba(0, 212, 255, 0.02) 0%, transparent 50%);
+}
+
+.top-header {
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--apex-border);
+    backdrop-filter: blur(10px);
+}
+
+.header-titles h2 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 1.15rem;
+}
+
+.header-titles .subtitle {
+    font-size: 0.8rem;
+    color: var(--apex-muted);
+    margin-top: 2px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid var(--apex-border);
+    color: var(--apex-muted);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--apex-text);
+    border-color: var(--apex-primary);
+}
+
+/* ── APEX Card System ──────────────────────────── */
+.apex-card {
+    background: var(--apex-card);
+    border: 1px solid var(--apex-border);
+    border-radius: 14px;
+    padding: 1.25rem;
+    backdrop-filter: blur(20px);
+    transition: border-color 0.2s, transform 0.2s;
+}
+
+.apex-card:hover {
+    border-color: rgba(0, 212, 255, 0.12);
+}
+
+.section-title {
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: #fff;
+    font-weight: 600;
+}
+
+/* ── APEX Buttons ──────────────────────────────── */
+.apex-btn {
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--apex-primary);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    padding: 0.7rem 1.25rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: var(--transition-smooth);
+    display: inline-flex;
+    align-items: center;
+}
+
+.apex-btn:hover {
+    background: var(--brand-gradient);
+    border-color: transparent;
+    color: #fff;
+    box-shadow: var(--glow-shadow);
+}
+
+.apex-btn-outline {
+    background: transparent;
+    color: var(--apex-muted);
+    border: 1px solid var(--apex-border);
+    padding: 0.7rem 1.25rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: var(--transition-smooth);
+    display: inline-flex;
+    align-items: center;
+}
+
+.apex-btn-outline:hover {
+    border-color: var(--apex-primary);
+    color: var(--apex-primary);
+}
+
+/* ── Chat Container ────────────────────────────── */
+.chat-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    scroll-behavior: smooth;
+}
+
+.welcome-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    max-width: 550px;
+    margin: auto;
+    animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.welcome-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--brand-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--glow-shadow);
+}
+
+.welcome-icon i {
+    width: 28px;
+    height: 28px;
+    color: #fff;
+}
+
+.welcome-screen h2 {
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.welcome-screen p {
+    color: var(--apex-muted);
+    margin-bottom: 2rem;
+}
+
+.suggested-prompts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.prompt-chip {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--apex-border);
+    color: var(--apex-text);
+    padding: 0.6rem 1rem;
+    border-radius: 100px;
+    font-size: 0.85rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.prompt-chip:hover {
+    background: rgba(0, 212, 255, 0.05);
+    border-color: var(--apex-primary);
+    color: var(--apex-primary);
+    transform: translateY(-1px);
+}
+
+/* ── Messages ──────────────────────────────────── */
+.message {
+    display: flex;
+    gap: 1rem;
+    max-width: 85%;
+    animation: fade-in 0.3s ease-out forwards;
+}
+
+.message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message.assistant {
+    align-self: flex-start;
+}
+
+.avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.message.user .avatar {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.message.assistant .avatar {
+    background: var(--brand-gradient);
+    box-shadow: 0 0 10px rgba(0, 115, 255, 0.3);
+}
+
+.avatar i {
+    width: 16px;
+    height: 16px;
+    color: #fff;
+}
+
+.msg-content {
+    background: var(--apex-card);
+    border: 1px solid var(--apex-border);
+    padding: 0.85rem 1.1rem;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.message.user .msg-content {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 14px 4px 14px 14px;
+}
+
+.message.assistant .msg-content {
+    border-radius: 4px 14px 14px 14px;
+    border-left: 2px solid var(--apex-primary);
+    background: linear-gradient(90deg, rgba(0, 212, 255, 0.04) 0%, transparent 100%);
+}
+
+.msg-content p {
+    margin-bottom: 0.6rem;
+}
+
+.msg-content p:last-child {
+    margin-bottom: 0;
+}
+
+.msg-content strong {
+    color: #fff;
+    font-weight: 600;
+}
+
+.msg-content ul,
+.msg-content ol {
+    margin-bottom: 0.6rem;
+    padding-left: 1.25rem;
+}
+
+.msg-content code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.15rem 0.35rem;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    color: var(--apex-primary);
+}
+
+.msg-content pre {
+    background: #0a0c10;
+    padding: 0.85rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin-bottom: 0.6rem;
+}
+
+.msg-content h1,
+.msg-content h2,
+.msg-content h3 {
+    margin-top: 0.75rem;
+    margin-bottom: 0.4rem;
+    font-family: var(--font-heading);
+}
+
+/* ── Input Area ────────────────────────────────── */
+.input-area {
+    padding: 0 2rem 1.25rem;
+    background: linear-gradient(180deg, transparent 0%, var(--apex-black) 20%);
+}
+
+.input-wrapper {
+    position: relative;
+    background: var(--apex-dark);
+    border: 1px solid var(--apex-border);
+    border-radius: 14px;
+    padding: 0.4rem;
+    display: flex;
+    align-items: flex-end;
+    transition: var(--transition-smooth);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.input-wrapper:focus-within {
+    border-color: rgba(0, 212, 255, 0.25);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.04), var(--glow-shadow);
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--apex-text);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    padding: 0.6rem 0.5rem 0.6rem 0.85rem;
+    resize: none;
+    outline: none;
+    max-height: 140px;
+    min-height: 44px;
+    overflow-y: auto;
+}
+
+.input-wrapper textarea::placeholder {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.send-btn {
+    background: var(--brand-gradient);
+    border: none;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin: 0.2rem;
+    transition: var(--transition-smooth);
+    flex-shrink: 0;
+}
+
+.send-btn i {
+    width: 18px;
+    height: 18px;
+}
+
+.send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.disclaimer {
+    text-align: center;
+    font-size: 0.68rem;
+    color: var(--apex-muted);
+    margin-top: 0.6rem;
+}
+
+/* ── Dashboard ─────────────────────────────────── */
+.dashboard-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 2rem;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.stat-icon i {
+    width: 24px;
+    height: 24px;
+    color: var(--apex-primary);
+}
+
+.stat-val {
+    display: block;
+    font-size: 1.35rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: #fff;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--apex-muted);
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+/* ── Insight Card ──────────────────────────────── */
+.insight-card {
+    margin-bottom: 1.5rem;
+    border-left: 3px solid var(--apex-primary);
+    background: linear-gradient(90deg, rgba(0, 212, 255, 0.04) 0%, var(--apex-card) 100%);
+}
+
+.insight-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--apex-text);
+}
+
+/* ── Heatmap ───────────────────────────────────── */
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(53, 1fr);
+    grid-template-rows: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.heatmap-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.1s;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.5);
+    z-index: 10;
+}
+
+.heatmap-cell[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--apex-dark);
+    color: var(--apex-text);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    z-index: 100;
+    border: 1px solid var(--apex-border);
+}
+
+/* ── Plan Calendar ─────────────────────────────── */
+.plan-calendar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+}
+
+.plan-day {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--apex-border);
+    border-radius: 10px;
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.plan-day.rest {
+    opacity: 0.6;
+}
+
+.plan-day .d-date {
+    font-size: 0.72rem;
+    color: var(--apex-muted);
+    font-family: var(--font-mono);
+}
+
+.plan-day .d-title {
+    font-weight: 600;
+    color: var(--apex-primary);
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+}
+
+.plan-day .d-desc {
+    font-size: 0.82rem;
+    color: var(--apex-text);
+    line-height: 1.4;
+}
+
+/* Workout type colors */
+.plan-day.type-easy .d-title {
+    color: var(--apex-success);
+}
+
+.plan-day.type-tempo .d-title {
+    color: var(--apex-secondary);
+}
+
+.plan-day.type-long .d-title {
+    color: #42a5f5;
+}
+
+.plan-day.type-rest .d-title {
+    color: var(--apex-muted);
+}
+
+.plan-day.type-race .d-title {
+    color: var(--apex-danger);
+}
+
+/* ── VDOT Badge ────────────────────────────────── */
+.vdot-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--apex-primary);
+    margin-bottom: 1rem;
+}
+
+/* ── Race Table ────────────────────────────────── */
+.race-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.race-table th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--apex-border);
+    color: var(--apex-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.race-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.race-table td:nth-child(2) {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: #fff;
+}
+
+/* ── Zone Table ────────────────────────────────── */
+.zone-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.zone-bar {
+    height: 8px;
+    border-radius: 4px;
+    flex: 1;
+}
+
+.zone-label {
+    width: 120px;
+    font-size: 0.82rem;
+    color: var(--apex-text);
+}
+
+.zone-range {
+    font-size: 0.8rem;
+    color: var(--apex-muted);
+    font-family: var(--font-mono);
+    width: 100px;
+    text-align: right;
+}
+
+/* ── Forms ─────────────────────────────────────── */
+.form-group {
+    margin-bottom: 0.85rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 0.85rem;
+}
+
+.form-row>* {
+    flex: 1;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--apex-muted);
+    margin-bottom: 0.3rem;
+}
+
+.form-group input,
+.form-input {
+    width: 100%;
+    background: var(--apex-dark);
+    border: 1px solid var(--apex-border);
+    color: #fff;
+    padding: 0.65rem;
+    border-radius: 8px;
+    outline: none;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+}
+
+.form-group input:focus,
+.form-input:focus {
+    border-color: rgba(0, 212, 255, 0.4);
+}
+
+/* ── Workouts List ─────────────────────────────── */
+.workouts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.workout-item {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 0.85rem;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.w-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.w-title {
+    font-weight: 500;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+.w-sub {
+    font-size: 0.78rem;
+    color: var(--apex-muted);
+}
+
+.w-metric {
+    text-align: right;
+}
+
+.w-tss {
+    font-family: var(--font-mono);
+    color: var(--apex-secondary);
+    font-weight: 600;
+}
+
+.text-muted {
+    color: var(--apex-muted);
+}
+
+/* ── Modal ─────────────────────────────────────── */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fade-in 0.2s ease-out;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 480px;
+}
+
+/* ── Animations ────────────────────────────────── */
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 0.5rem 0;
+}
+
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--apex-primary);
+    border-radius: 50%;
+    animation: pulse 1.4s infinite ease-in-out both;
+}
+
+/* ── Skeleton Loading ──────────────────────────── */
+.skeleton {
+    background: linear-gradient(90deg, var(--apex-card) 25%, rgba(255, 255, 255, 0.05) 50%, var(--apex-card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ── Scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Plan Generating Skeletons */
+.skeleton-header,
+.skeleton-row {
+    background: linear-gradient(90deg, #1a1a2e 25%, #232342 50%, #1a1a2e 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+    margin: 8px 0;
+}
+
+.skeleton-header {
+    height: 32px;
+    width: 60%;
+}
+
+.skeleton-row {
+    height: 20px;
+    width: 100%;
+}
+
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--apex-primary);
+    animation: pulse 1.2s infinite;
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.plan-generating-banner {
+    padding: 15px;
+    border-radius: var(--radius-md);
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid var(--apex-primary);
+    color: var(--apex-primary);
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.week-skeleton {
+    background: var(--apex-card);
+    border: 1px solid var(--apex-border);
+    border-radius: var(--radius-md);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(0, 212, 255, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(0, 212, 255, 0);
+    }
+}

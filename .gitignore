@@ -1,4 +1,11 @@
 __pycache__/
 .env
-venv/
+sportsllm/
 .DS_Store
+*.pyc
+server.log
+data/apex_user.db
+data/endurance_db/
+data/~/*
+data/kaggle_data/
+notebooks/
